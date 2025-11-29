@@ -3,16 +3,15 @@ from modules import format_data, flag_compile, review, report, annual
 
 st.set_page_config(page_title="Water Temp QAQC", layout="wide")
 
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Format Data", "Flag Compile", "Review Data", "Generate Report", "Annual Report"])
+pages = {
+    "Format Data": format_data.app,
+    "Flag & Compile": flag_compile.app,
+    "Review Data": review.app,
+    "Generate Report": report.app,
+    "Annual Report": annual.app
+}
 
-if page == "Format Data":
-    format_data.app()
-elif page == "Flag Compile":
-    flag_compile.app()
-elif page == "Review Data":
-    review.app()
-elif page == "Generate Report":
-    report.app()
-elif page == "Annual Report":
-    annual.app()
+st.sidebar.title("Navigation")
+selection = st.sidebar.radio("Go to", list(pages.keys()))
+
+pages[selection]()

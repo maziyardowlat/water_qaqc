@@ -7,9 +7,9 @@ import os
 def app():
     st.header("Generate QAQC Report")
 
-    # 1. Select Reviewed Data File
-    st.subheader("1. Select Reviewed Data")
-    # Look for files in 02_Tidy (both raw tidy and reviewed)
+    # 1. Select Tidy Data File
+    st.subheader("1. Select Tidy Data")
+    # Look for files in 02_Tidy
     tidy_files = file_manager.list_files(subfolder="01_Data/02_Tidy", pattern=".csv")
     # Filter out notes files
     tidy_files = [f for f in tidy_files if not f.endswith("_notes.csv")]
@@ -99,8 +99,6 @@ def app():
                                 prev_field_out = meta.get('prev_field_out', "N/A")
                                 if 'record_start' in meta:
                                     record_start = meta['record_start']
-                                if 'record_end' in meta:
-                                    record_end = meta['record_end']
                                 st.success(f"Loaded metadata from {json_name}")
                         except Exception as e:
                             st.warning(f"Found metadata file but failed to load: {e}")
@@ -240,14 +238,29 @@ def app():
                         f.write(full_html)
                         
                     st.success(f"Report saved to: {report_path}")
-                    st.markdown(f"[Open Report](file://{report_path})", unsafe_allow_html=True)
                     
-                    if st.button("Open Report Now"):
-                        import webbrowser
-                        webbrowser.open(f"file://{report_path}")
+                    # Store path in session state for the persistent button
+                    st.session_state['generated_report_path'] = report_path
                     
                 except Exception as e:
                     st.error(f"Failed to generate report: {e}")
+
+            # Persistent Open Button (Outside the generate block)
+            if 'generated_report_path' in st.session_state:
+                report_path = st.session_state['generated_report_path']
+                if st.button("Open Report Now"):
+                    import subprocess
+                    import sys
+                    try:
+                        if sys.platform == 'darwin': # macOS
+                            subprocess.run(['open', report_path], check=True)
+                        elif sys.platform == 'win32': # Windows
+                            os.startfile(report_path)
+                        else: # Linux
+                            subprocess.run(['xdg-open', report_path], check=True)
+                    except Exception as e:
+                        st.error(f"Could not open file automatically: {e}")
+                        st.info(f"Please open this file manually: {report_path}")
 
             st.info("You can also print this page to PDF using your browser's print function.")
 
