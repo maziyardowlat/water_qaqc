@@ -1,0 +1,16 @@
+# Virtual Environment
+water_temp_app/water_temp/
+venv/
+env/
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Mac
+.DS_Store
+
+# Streamlit
+.streamlit/
