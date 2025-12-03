@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from utils import file_manager
 import os
 
@@ -51,12 +52,48 @@ def app():
 
             # Final Plot
             st.markdown("### Final Time Series")
-            fig = px.line(df, x='timestamp', y='wtmp', title="Water Temperature Time Series")
-            # Add markers for non-pass
-            non_pass = df[df['wtmp_flag'] != 'P']
-            if not non_pass.empty:
-                fig.add_scatter(x=non_pass['timestamp'], y=non_pass['wtmp'], mode='markers', 
-                                marker=dict(color='red', size=5), name='Flagged')
+            
+            # Create a combined Line + Scatter plot similar to Review/Flag modules
+            fig = go.Figure()
+            
+            # 1. Add Line (All data) - Gray background line for connectivity
+            fig.add_trace(go.Scatter(
+                x=df['timestamp'], 
+                y=df['wtmp'], 
+                mode='lines',
+                name='Temperature',
+                line=dict(color='gray', width=1),
+                hoverinfo='skip' # Skip hover on the line, focus on points
+            ))
+            
+            # 2. Add markers for each flag type
+            colors = {
+                'P': 'green', 'S': 'red', 'E': 'purple', 
+                'T': 'orange', 'B': 'blue', 'M': 'darkred', 'V': 'pink',
+                'D': 'brown', 'N': 'gray'
+            }
+            
+            # Get all unique flags present in the data
+            present_flags = df['wtmp_flag'].unique()
+            
+            for flag in present_flags:
+                subset = df[df['wtmp_flag'] == flag]
+                color = colors.get(flag, 'black') # Default to black if unknown
+                
+                fig.add_trace(go.Scatter(
+                    x=subset['timestamp'],
+                    y=subset['wtmp'],
+                    mode='markers',
+                    name=f"Flag: {flag}",
+                    marker=dict(color=color, size=6)
+                ))
+
+            fig.update_layout(
+                title=f"Water Temperature Time Series - {selected_file}",
+                xaxis_title="Timestamp",
+                yaxis_title="Water Temperature",
+                hovermode="closest"
+            )
             
             st.plotly_chart(fig, use_container_width=True)
 
@@ -102,6 +139,24 @@ def app():
                                 st.success(f"Loaded metadata from {json_name}")
                         except Exception as e:
                             st.warning(f"Found metadata file but failed to load: {e}")
+                    
+                    # Fallback: If selected file is a "_reviewed" file, try loading metadata from the original file
+                    elif "_reviewed" in selected_file:
+                        original_json_name = json_name.replace("_reviewed_metadata.json", "_metadata.json")
+                        original_json_path = os.path.join(file_manager.get_project_dir(), "01_Data/02_Tidy", original_json_name)
+                        if os.path.exists(original_json_path):
+                            try:
+                                with open(original_json_path, 'r') as f:
+                                    meta = json.load(f)
+                                    field_in = meta.get('field_in', "N/A")
+                                    field_out = meta.get('field_out', "N/A")
+                                    prev_field_in = meta.get('prev_field_in', "N/A")
+                                    prev_field_out = meta.get('prev_field_out', "N/A")
+                                    if 'record_start' in meta:
+                                        record_start = meta['record_start']
+                                    st.success(f"Loaded metadata from original file: {original_json_name}")
+                            except Exception as e:
+                                st.warning(f"Found original metadata file but failed to load: {e}")
                     
                     # Fallback to session state if JSON not found (for backward compatibility or immediate session)
                     elif 'qaqc_metadata' in st.session_state and st.session_state.get('last_saved_tidy_file') == selected_file:

@@ -25,7 +25,14 @@ def extract_times_from_pdf(pdf_file):
     time_out_match = re.search(r"Time-out\s*[:]?\s*(\d{1,2}:\d{2})", text, re.IGNORECASE)
     
     # Regex for Date
-    date_match = re.search(r"(\d{4}-\d{2}-\d{2})", text) # YYYY-MM-DD
+    # Prioritize "Date:" or "Visit Date:" label
+    date_match = re.search(r"(?:Date|Visit Date)\s*[:]?\s*(\d{4}-\d{2}-\d{2})", text, re.IGNORECASE)
+    if not date_match:
+        date_match = re.search(r"(?:Date|Visit Date)\s*[:]?\s*(\d{1,2}/\d{1,2}/\d{2,4})", text, re.IGNORECASE)
+    
+    # Fallback to any date if no label found (but this might pick up print dates)
+    if not date_match:
+        date_match = re.search(r"(\d{4}-\d{2}-\d{2})", text) # YYYY-MM-DD
     if not date_match:
         date_match = re.search(r"(\d{1,2}/\d{1,2}/\d{2,4})", text) # MM/DD/YYYY
     
