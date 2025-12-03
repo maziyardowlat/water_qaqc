@@ -80,13 +80,13 @@ def app():
             st.subheader("2. QAQC Parameters")
             col1, col2 = st.columns(2)
             with col1:
-                spike_threshold = st.number_input("Spike Threshold (deg C)", value=0.8)
-                roll_diff_threshold = st.number_input("Rolling Diff Threshold (deg C)", value=1.5)
-                stdev_threshold = st.number_input("Standard Deviation Threshold", value=2.0)
+                spike_threshold = st.number_input("Spike Threshold (deg C)", value=0.8, disabled=True)
+                roll_diff_threshold = st.number_input("Rolling Diff Threshold (deg C)", value=1.5, disabled=True)
+                stdev_threshold = st.number_input("Standard Deviation Threshold", value=2.0, disabled=True)
             with col2:
-                min_temp = st.number_input("Min Temperature", value=-20.0)
-                max_temp = st.number_input("Max Temperature", value=50.0)
-                high_temp_threshold = st.number_input("High Temp Warning", value=35.0)
+                min_temp = st.number_input("Min Temperature", value=-20.0, disabled=True)
+                max_temp = st.number_input("Max Temperature", value=50.0, disabled=True)
+                high_temp_threshold = st.number_input("High Temp Warning", value=35.0, disabled=True)
 
             # Calculate default Visit Times from data
             default_in_val = "2025-09-18 17:27"

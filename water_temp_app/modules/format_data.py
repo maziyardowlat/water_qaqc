@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from utils import file_manager
 import os
+import re
 
 def app():
     st.header("Format Raw Data")
@@ -87,12 +88,38 @@ def app():
                 
                 # Metadata Inputs
                 st.subheader("Metadata")
+                
+                # Auto-extract metadata from filename
+                default_station = ""
+                default_serial = ""
+                if uploaded_file:
+                    try:
+                        # Assumption: filename format is Station_raw_Serial_Date...
+                        # Split by '_raw_' to separate Station and the rest
+                        parts = re.split(r'_raw_', uploaded_file.name, flags=re.IGNORECASE)
+                        
+                        if len(parts) > 1:
+                            default_station = parts[0]
+                            # The rest is Serial_Date...
+                            # Split by '_' to get Serial
+                            rest_parts = parts[1].split('_')
+                            if len(rest_parts) > 0:
+                                default_serial = rest_parts[0]
+                    except Exception:
+                        pass
+
                 col1, col2 = st.columns(2)
                 with col1:
-                    station_code = st.text_input("Station Code")
-                    logger_serial = st.text_input("Logger Serial Number")
+                    # Use filename-based key to ensure updates when file changes
+                    station_code = st.text_input("Station Code", value=default_station, key=f"station_{uploaded_file.name}")
+                    logger_serial = st.text_input("Logger Serial Number", value=default_serial, key=f"serial_{uploaded_file.name}")
                 with col2:
-                    utc_offset = st.number_input("UTC Offset", value=0)
+                    # Link UTC Offset to Source Timezone Offset if enabled
+                    default_offset = 0.0
+                    if apply_tz_conversion and 'tz_offset' in locals():
+                        default_offset = float(tz_offset)
+                        
+                    utc_offset = st.number_input("UTC Offset", value=default_offset)
                     data_id = st.number_input("Data ID", value=0)
                 
                 # Save Button
