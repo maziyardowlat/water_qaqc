@@ -5,6 +5,38 @@ import plotly.express as px
 import plotly.graph_objects as go
 from utils import file_manager
 import os
+import pdfplumber
+import re
+from datetime import datetime, timedelta
+
+def extract_times_from_pdf(pdf_file):
+    times = {}
+    text = ""
+    try:
+        with pdfplumber.open(pdf_file) as pdf:
+            for page in pdf.pages:
+                text += page.extract_text() + "\n"
+    except Exception as e:
+        return times
+
+    # Regex for Time-in and Time-out
+    # User example: "Time-in 14:46 (-7 GMT)"
+    time_in_match = re.search(r"Time-in\s*[:]?\s*(\d{1,2}:\d{2})", text, re.IGNORECASE)
+    time_out_match = re.search(r"Time-out\s*[:]?\s*(\d{1,2}:\d{2})", text, re.IGNORECASE)
+    
+    # Regex for Date
+    date_match = re.search(r"(\d{4}-\d{2}-\d{2})", text) # YYYY-MM-DD
+    if not date_match:
+        date_match = re.search(r"(\d{1,2}/\d{1,2}/\d{2,4})", text) # MM/DD/YYYY
+    
+    if time_in_match:
+        times['in'] = time_in_match.group(1)
+    if time_out_match:
+        times['out'] = time_out_match.group(1)
+    if date_match:
+        times['date'] = date_match.group(1)
+        
+    return times
 
 def app():
     st.header("Flag & Compile Data")
@@ -156,6 +188,53 @@ def app():
 
             # Visit Times (for V flag)
             st.subheader("Field Visit Times")
+            
+            # PDF Upload for Current Visit
+            visit_pdf = st.file_uploader("open pdf to populate fieldtimes", type="pdf", key="visit_pdf")
+            convert_utc = st.checkbox("convert it to UTC", value=False, key="convert_utc_visit")
+            
+            if visit_pdf:
+                try:
+                    extracted = extract_times_from_pdf(visit_pdf)
+                    
+                    # Determine Date base
+                    base_date_str = default_in_val.split(" ")[0] if default_in_val else pd.Timestamp.now().strftime("%Y-%m-%d")
+                    if 'date' in extracted:
+                        try:
+                            d = pd.to_datetime(extracted['date'])
+                            base_date_str = d.strftime("%Y-%m-%d")
+                        except:
+                            pass
+                    
+                    # Process Time In
+                    if 'in' in extracted:
+                        dt_in_str = f"{base_date_str} {extracted['in']}"
+                        if convert_utc:
+                            try:
+                                dt_obj = pd.to_datetime(dt_in_str)
+                                dt_obj += pd.Timedelta(hours=7)
+                                default_in_val = dt_obj.strftime("%Y-%m-%d %H:%M")
+                            except:
+                                default_in_val = dt_in_str
+                        else:
+                            default_in_val = dt_in_str
+                            
+                    # Process Time Out
+                    if 'out' in extracted:
+                        dt_out_str = f"{base_date_str} {extracted['out']}"
+                        if convert_utc:
+                            try:
+                                dt_obj = pd.to_datetime(dt_out_str)
+                                dt_obj += pd.Timedelta(hours=7)
+                                default_out_val = dt_obj.strftime("%Y-%m-%d %H:%M")
+                            except:
+                                default_out_val = dt_out_str
+                        else:
+                            default_out_val = dt_out_str
+                            
+                    st.success("Times extracted from PDF!")
+                except Exception as e:
+                    st.error(f"Failed to extract from PDF: {e}")
             visit_col1, visit_col2 = st.columns(2)
             with visit_col1:
                 datetime_in = st.text_input("Datetime In (YYYY-MM-DD HH:MM)", value=default_in_val)
@@ -164,13 +243,61 @@ def app():
             
             # Previous Visit Times (for V flag on historical overlap)
             st.subheader("Previous Field Visit Times (Optional)")
+            
+            prev_in_val = ""
+            prev_out_val = ""
+
+            # PDF Upload for Previous Visit
+            prev_visit_pdf = st.file_uploader("open pdf to populate fieldtimes", type="pdf", key="prev_visit_pdf")
+            prev_convert_utc = st.checkbox("convert it to UTC", value=False, key="convert_utc_prev")
+            
+            if prev_visit_pdf:
+                try:
+                    extracted = extract_times_from_pdf(prev_visit_pdf)
+                    
+                    # Determine Date base
+                    base_date_str = prev_in_val.split(" ")[0] if prev_in_val else pd.Timestamp.now().strftime("%Y-%m-%d")
+                    if 'date' in extracted:
+                        try:
+                            d = pd.to_datetime(extracted['date'])
+                            base_date_str = d.strftime("%Y-%m-%d")
+                        except:
+                            pass
+                    
+                    # Process Time In
+                    if 'in' in extracted:
+                        dt_in_str = f"{base_date_str} {extracted['in']}"
+                        if prev_convert_utc:
+                            try:
+                                dt_obj = pd.to_datetime(dt_in_str)
+                                dt_obj += pd.Timedelta(hours=7)
+                                prev_in_val = dt_obj.strftime("%Y-%m-%d %H:%M")
+                            except:
+                                prev_in_val = dt_in_str
+                        else:
+                            prev_in_val = dt_in_str
+                            
+                    # Process Time Out
+                    if 'out' in extracted:
+                        dt_out_str = f"{base_date_str} {extracted['out']}"
+                        if prev_convert_utc:
+                            try:
+                                dt_obj = pd.to_datetime(dt_out_str)
+                                dt_obj += pd.Timedelta(hours=7)
+                                prev_out_val = dt_obj.strftime("%Y-%m-%d %H:%M")
+                            except:
+                                prev_out_val = dt_out_str
+                        else:
+                            prev_out_val = dt_out_str
+                            
+                    st.success("Times extracted from PDF!")
+                except Exception as e:
+                    st.error(f"Failed to extract from PDF: {e}")
+
             st.info("Use this to flag data from a previous visit if it overlaps with this dataset.")
             
             # Auto-fill logic for No FastField Form
             no_fastfield = st.checkbox("No FastField Form (Auto-fill from Historical Data)")
-            
-            prev_in_val = ""
-            prev_out_val = ""
             
             if no_fastfield:
                 if hist_end is not None:
