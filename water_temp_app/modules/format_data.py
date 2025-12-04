@@ -17,18 +17,102 @@ def app():
         else:
             st.sidebar.error("Invalid directory path")
 
-    # File Upload
-    uploaded_file = st.file_uploader("Choose CSV File", type=['csv', 'txt'])
+    # File Source Selection
+    file_source = st.radio("File Source", ["Upload File", "Select from Server (OneDrive)"], horizontal=True)
     
-    if uploaded_file is not None:
+    uploaded_file = None
+    server_file_path = None
+    
+    if file_source == "Upload File":
+        uploaded_file = st.file_uploader("Choose CSV File", type=['csv', 'txt'])
+    else:
+        # Server Selection Logic
+        import glob
+        
+        # Try to guess station code from current project dir
+        default_station_code = ""
+        current_project_dir = file_manager.get_project_dir()
+        if "02_Stations" in current_project_dir:
+            # Assume folder name starts with station code
+            folder_name = os.path.basename(current_project_dir)
+            default_station_code = folder_name.split("_")[0] if "_" in folder_name else folder_name
+
+        col_server1, col_server2 = st.columns(2)
+        with col_server1:
+            username_input = st.text_input("Username (for OneDrive Path)", value="dowlataba")
+        with col_server2:
+            station_code_input = st.text_input("Enter Station Code to Search", value=default_station_code)
+        
+        if station_code_input and username_input:
+            # We need to find the base "02_Stations" directory.
+            # If current_project_dir is inside 02_Stations, we can go up.
+            # Otherwise, we might need to ask the user or rely on the standard path if it exists.
+            
+            base_stations_dir = None
+            
+            if "02_Stations" in current_project_dir:
+                # Split path at 02_Stations and keep the first part + 02_Stations
+                parts = current_project_dir.split("02_Stations")
+                base_stations_dir = os.path.join(parts[0], "02_Stations")
+            else:
+                # Construct from Username
+                # Path: /Users/{username}/OneDrive - UNBC/NHG Field - Data Management/02_Stations
+                user_onedrive_path = os.path.join("/Users", username_input, "OneDrive - UNBC", "NHG Field - Data Management")
+                base_stations_dir = os.path.join(user_onedrive_path, "02_Stations")
+                
+                # Check if User/OneDrive path exists
+                if not os.path.exists(user_onedrive_path):
+                    st.error(f"Could not find OneDrive folder for user '{username_input}'. Expected path: {user_onedrive_path}")
+                    base_stations_dir = None # Prevent further checks
+                elif not os.path.exists(base_stations_dir):
+                    st.error(f"Found OneDrive folder, but '02_Stations' directory is missing in: {user_onedrive_path}")
+                    base_stations_dir = None
+                
+            if base_stations_dir and os.path.exists(base_stations_dir):
+                # Search for station folder
+                search_pattern = os.path.join(base_stations_dir, f"{station_code_input}*")
+                matching_folders = glob.glob(search_pattern)
+                
+                if matching_folders:
+                    station_folder = matching_folders[0]
+                    # Look for raw files in 01_Data/01_Raw
+                    raw_dir = os.path.join(station_folder, "01_Data", "01_Raw")
+                    
+                    if os.path.exists(raw_dir):
+                        raw_files = [f for f in os.listdir(raw_dir) if f.endswith(".csv") or f.endswith(".txt")]
+                        if raw_files:
+                            selected_filename = st.selectbox("Select Raw File", raw_files)
+                            server_file_path = os.path.join(raw_dir, selected_filename)
+                            st.success(f"Selected: {selected_filename}")
+                            
+                            # Update project dir to this station if not already
+                            if current_project_dir != station_folder:
+                                if st.button(f"Switch Project Directory to {os.path.basename(station_folder)}"):
+                                    file_manager.set_project_dir(station_folder)
+                                    st.rerun()
+                        else:
+                            st.warning(f"No CSV/TXT files found in {raw_dir}")
+                    else:
+                        st.warning(f"Raw data directory not found: {raw_dir}")
+                else:
+                    st.error(f"Station folder starting with '{station_code_input}' not found in: {base_stations_dir}")
+            
+    
+    if uploaded_file is not None or server_file_path is not None:
         # Skip Rows
         skip_rows = st.number_input("Rows to Skip", min_value=0, value=1)
         
         try:
             # Read CSV
-            # Reset file pointer to 0 before reading again if needed, but pandas handles it usually
-            uploaded_file.seek(0)
-            df = pd.read_csv(uploaded_file, skiprows=skip_rows)
+            if uploaded_file is not None:
+                # Reset file pointer to 0 before reading again if needed, but pandas handles it usually
+                uploaded_file.seek(0)
+                df = pd.read_csv(uploaded_file, skiprows=skip_rows)
+                file_name_for_meta = uploaded_file.name
+            else:
+                # Server file
+                df = pd.read_csv(server_file_path, skiprows=skip_rows)
+                file_name_for_meta = os.path.basename(server_file_path)
             
             # Filter "Logged" rows (from R script logic)
             # R: df[apply(df, 1, function(row) !any(row == "Logged")), , drop = FALSE]
@@ -92,27 +176,27 @@ def app():
                 # Auto-extract metadata from filename
                 default_station = ""
                 default_serial = ""
-                if uploaded_file:
-                    try:
-                        # Assumption: filename format is Station_raw_Serial_Date...
-                        # Split by '_raw_' to separate Station and the rest
-                        parts = re.split(r'_raw_', uploaded_file.name, flags=re.IGNORECASE)
-                        
-                        if len(parts) > 1:
-                            default_station = parts[0]
-                            # The rest is Serial_Date...
-                            # Split by '_' to get Serial
-                            rest_parts = parts[1].split('_')
-                            if len(rest_parts) > 0:
-                                default_serial = rest_parts[0]
-                    except Exception:
-                        pass
+                # Use file_name_for_meta which is set above
+                try:
+                    # Assumption: filename format is Station_raw_Serial_Date...
+                    # Split by '_raw_' to separate Station and the rest
+                    parts = re.split(r'_raw_', file_name_for_meta, flags=re.IGNORECASE)
+                    
+                    if len(parts) > 1:
+                        default_station = parts[0]
+                        # The rest is Serial_Date...
+                        # Split by '_' to get Serial
+                        rest_parts = parts[1].split('_')
+                        if len(rest_parts) > 0:
+                            default_serial = rest_parts[0]
+                except Exception:
+                    pass
 
                 col1, col2 = st.columns(2)
                 with col1:
                     # Use filename-based key to ensure updates when file changes
-                    station_code = st.text_input("Station Code", value=default_station, key=f"station_{uploaded_file.name}")
-                    logger_serial = st.text_input("Logger Serial Number", value=default_serial, key=f"serial_{uploaded_file.name}")
+                    station_code = st.text_input("Station Code", value=default_station, key=f"station_{file_name_for_meta}")
+                    logger_serial = st.text_input("Logger Serial Number", value=default_serial, key=f"serial_{file_name_for_meta}")
                 with col2:
                     # Link UTC Offset to Source Timezone Offset if enabled
                     default_offset = 0.0
