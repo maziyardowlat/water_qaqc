@@ -53,7 +53,8 @@ def app():
             fig = px.scatter(filtered_df, x='timestamp', y='wtmp', color='wtmp_flag',
                              color_discrete_map={
                                  'P': 'green', 'S': 'red', 'E': 'purple', 
-                                 'T': 'orange', 'B': 'blue', 'M': 'darkred', 'V': 'pink'
+                                 'T': 'orange', 'B': 'blue', 'M': 'darkred', 'V': 'pink',
+                                 'A': 'black'
                              },
                              title=f"Review: {selected_file}")
             st.plotly_chart(fig, use_container_width=True)

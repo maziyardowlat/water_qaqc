@@ -70,7 +70,7 @@ def app():
             colors = {
                 'P': 'green', 'S': 'red', 'E': 'purple', 
                 'T': 'orange', 'B': 'blue', 'M': 'darkred', 'V': 'pink',
-                'D': 'brown', 'N': 'gray'
+                'D': 'brown', 'N': 'gray', 'A': 'black'
             }
             
             # Get all unique flags present in the data
@@ -205,7 +205,8 @@ def app():
                             'T': 'Above threshold 35',
                             'D': 'Duplicate timestamp',
                             'M': 'Missing value',
-                            'V': 'Visit'
+                            'V': 'Visit',
+                            'A': 'Air/Dewatered'
                         }
                         
                         flag_counts['flag_name'] = flag_counts['flag_symbol'].map(flag_names).fillna('Unknown')
@@ -218,8 +219,8 @@ def app():
                                 flag_counts = pd.concat([flag_counts, new_row], ignore_index=True)
                         
                         # Sort by some logical order or just symbol
-                        # User example order: P, N, B, S, E, T, D, M, V
-                        order = ['P', 'N', 'B', 'S', 'E', 'T', 'D', 'M', 'V']
+                        # User example order: P, N, B, S, E, T, D, M, V, A
+                        order = ['P', 'N', 'B', 'S', 'E', 'T', 'D', 'M', 'V', 'A']
                         flag_counts['order'] = flag_counts['flag_symbol'].map({k: i for i, k in enumerate(order)})
                         flag_counts = flag_counts.sort_values('order').drop(columns=['order'])
 

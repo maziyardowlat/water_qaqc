@@ -11,7 +11,34 @@ pages = {
     "Annual Report": annual.app
 }
 
+from utils import file_manager
+import os
+import glob
+
 st.sidebar.title("Navigation")
+
+# OneDrive Integration
+use_onedrive = st.sidebar.checkbox("Use with UNBC OneDrive")
+if use_onedrive:
+    username = st.sidebar.text_input("Username", value="dowlataba")
+    station_code = st.sidebar.text_input("Station Code (e.g. 02FW006)")
+    
+    if username and station_code:
+        # Construct path: /Users/{username}/OneDrive - UNBC/NHG Field - Data Management/02_Stations/{station_code}*
+        base_path = os.path.join("/Users", username, "OneDrive - UNBC", "NHG Field - Data Management", "02_Stations")
+        search_pattern = os.path.join(base_path, f"{station_code}*")
+        matching_folders = glob.glob(search_pattern)
+        
+        if matching_folders:
+            # Use the first match
+            station_folder = matching_folders[0]
+            if file_manager.set_project_dir(station_folder):
+                st.sidebar.success(f"Connected: {os.path.basename(station_folder)}")
+            else:
+                st.sidebar.error("Failed to set directory.")
+        else:
+            st.sidebar.warning(f"No folder found for {station_code} in OneDrive.")
+
 selection = st.sidebar.radio("Go to", list(pages.keys()))
 
 pages[selection]()

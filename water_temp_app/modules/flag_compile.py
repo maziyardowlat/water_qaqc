@@ -94,6 +94,7 @@ def app():
                 min_temp = st.number_input("Min Temperature", value=-20.0, disabled=True)
                 max_temp = st.number_input("Max Temperature", value=50.0, disabled=True)
                 high_temp_threshold = st.number_input("High Temp Warning", value=35.0, disabled=True)
+                diurnal_threshold = st.number_input("Diurnal Range Threshold", value=10.0, disabled=True)
 
             # Calculate default Visit Times from data
             default_in_val = "2025-09-18 17:27"
@@ -459,6 +460,24 @@ def app():
                     ice_mask = (df['wtmp'] < 0.0)
                     df.loc[ice_mask, 'wtmp_flag'] = 'B'
                     
+                    # Diurnal Range Check (Flag 'A' for Air/Dewatered)
+                    # Group by date
+                    df['date'] = df['timestamp'].dt.date
+                    daily_stats = df.groupby('date')['wtmp'].agg(['max', 'min'])
+                    daily_stats['range'] = daily_stats['max'] - daily_stats['min']
+                    
+                    # Identify bad days
+                    bad_days = daily_stats[daily_stats['range'] > diurnal_threshold].index
+                    
+                    if not bad_days.empty:
+                        # Create mask for all rows where date is in bad_days
+                        diurnal_mask = df['date'].isin(bad_days)
+                        df.loc[diurnal_mask, 'wtmp_flag'] = 'A'
+                        st.warning(f"Flagged {len(bad_days)} days as 'A' (Air/Dewatered) due to diurnal range > {diurnal_threshold}C")
+                    
+                    # Drop temporary date column
+                    df = df.drop(columns=['date'])
+                    
                     # Missing (M)
                     missing_mask = df['wtmp'].isna()
                     df.loc[missing_mask, 'wtmp_flag'] = 'M'
@@ -524,7 +543,7 @@ def app():
                 colors = {
                     'P': 'green', 'S': 'red', 'E': 'purple', 
                     'T': 'orange', 'B': 'blue', 'M': 'darkred', 'V': 'pink',
-                    'D': 'brown'
+                    'D': 'brown', 'A': 'black'
                 }
                 
                 for flag, color in colors.items():
