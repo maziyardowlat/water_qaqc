@@ -204,7 +204,8 @@ def app():
                     # Save HTML
                     report_name = f"{station}_annualReport_{year}.html"
                     project_dir = file_manager.get_project_dir()
-                    report_path = os.path.join(project_dir, "01_Data", report_name)
+                    report_path = os.path.join(project_dir, "03_Reports", "03_Annual", report_name)
+                    os.makedirs(os.path.dirname(report_path), exist_ok=True)
                     
                     with open(report_path, "w") as f:
                         f.write(full_html)
