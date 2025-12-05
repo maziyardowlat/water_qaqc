@@ -124,7 +124,7 @@ def app():
                     # Try to load metadata from JSON sidecar
                     import json
                     json_name = selected_file.replace(".csv", "_metadata.json")
-                    json_path = os.path.join(file_manager.get_project_dir(), "03_Reports/02_QAQC", json_name)
+                    json_path = os.path.join(file_manager.get_project_dir(), "01_Data/02_Tidy", json_name)
                     
                     if os.path.exists(json_path):
                         try:
@@ -143,7 +143,7 @@ def app():
                     # Fallback: If selected file is a "_reviewed" file, try loading metadata from the original file
                     elif "_reviewed" in selected_file:
                         original_json_name = json_name.replace("_reviewed_metadata.json", "_metadata.json")
-                        original_json_path = os.path.join(file_manager.get_project_dir(), "03_Reports/02_QAQC", original_json_name)
+                        original_json_path = os.path.join(file_manager.get_project_dir(), "01_Data/02_Tidy", original_json_name)
                         if os.path.exists(original_json_path):
                             try:
                                 with open(original_json_path, 'r') as f:
