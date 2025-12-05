@@ -228,12 +228,12 @@ def app():
                                 st.error(f"Failed to convert timezone: {e}")
                                 return # Stop saving if conversion fails
                         
-                        # Construct filename
-                        # Format: StationCode_formatted_LoggerSerial.csv (or similar)
-                        filename = f"{station_code}_formatted_{logger_serial}.csv"
+                        # Save to Session State instead of file
+                        st.session_state['formatted_df'] = df_selected
+                        st.session_state['formatted_filename'] = f"{station_code}_formatted_{logger_serial}.csv" # Keep name for reference
                         
-                        saved_path = file_manager.save_data(df_selected, filename)
-                        st.success(f"Data saved to {saved_path}")
+                        st.success(f"Data formatted and ready in memory. Please proceed to 'Flag & Compile' immediately.")
+                        st.info("Note: No intermediate file is saved.")
                         st.dataframe(df_selected.head())
 
         except Exception as e:

@@ -19,9 +19,6 @@ def app():
         st.rerun()
 
     tidy_files = file_manager.list_files(subfolder="01_Data/02_Tidy", pattern=".csv")
-    # Filter out notes files
-    tidy_files = [f for f in tidy_files if not f.endswith("_notes.csv")]
-    
     if not tidy_files:
         st.warning("No tidy files found. Please go to 'Flag Compile' first.")
         return
@@ -81,22 +78,27 @@ def app():
 
             # 4. Notes
             st.subheader("4. QAQC Notes")
-            notes = st.text_area("Enter notes for this review session:")
+            
+            # Load existing notes from SESSION STATE
+            existing_note = st.session_state.get('qaqc_notes', "")
+            
+            notes = st.text_area("Enter notes for this review session:", value=existing_note)
+            
+            if notes != existing_note:
+                st.info("Notes modified. Will update Session State on save.")
 
             # 5. Save
             if st.button("Save Reviewed Data"):
-                # Save back to Tidy folder (overwrite or new version?)
-                # Usually overwrite or save as _reviewed
-                save_name = selected_file.replace(".csv", "_reviewed.csv")
-                if "_reviewed" in selected_file:
-                    save_name = selected_file
+                # Update Session State
+                st.session_state['qaqc_notes'] = notes
+                
+                # Save back to Tidy folder (OVERWRITE)
+                # Ensure no 'qaqc_notes' column is in df
+                if 'qaqc_notes' in df.columns:
+                    df = df.drop(columns=['qaqc_notes'])
+
+                save_name = selected_file
                 
                 saved_path = file_manager.save_data(df, save_name, subfolder="01_Data/02_Tidy")
-                
-                # Save notes?
-                if notes:
-                    notes_file = save_name.replace(".csv", "_notes.txt")
-                    notes_path = file_manager.save_data(pd.DataFrame({'notes': [notes]}), notes_file.replace(".txt", ".csv"), subfolder="01_Data/02_Tidy")
-                    st.success(f"Notes saved.")
-
-                st.success(f"Reviewed data saved to {saved_path}")
+                st.success(f"Reviewed data saved (overwritten) to {saved_path}")
+                st.info("Notes saved to Session Memory.")

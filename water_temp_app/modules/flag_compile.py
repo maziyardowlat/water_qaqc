@@ -48,17 +48,29 @@ def extract_times_from_pdf(pdf_file):
 def app():
     st.header("Flag & Compile Data")
 
-    # 1. Select Formatted Data File
+    # 1. Select Formatted Data (From Session State)
     st.subheader("1. Select Formatted Data")
-    formatted_files = file_manager.list_files(subfolder="01_Data/01_Raw_Formatted", pattern=".csv")
-    if not formatted_files:
-        st.warning("No formatted files found. Please go to 'Format Data' first.")
-        return
-
-    selected_file = st.selectbox("Choose File", formatted_files)
     
-    if selected_file:
-        df = file_manager.load_data(selected_file, subfolder="01_Data/01_Raw_Formatted")
+    df = None
+    selected_file = "Session Data"
+    
+    if 'formatted_df' in st.session_state:
+        df = st.session_state['formatted_df']
+        selected_file = st.session_state.get('formatted_filename', "Session Data")
+        st.success(f"Loaded data from previous step: {selected_file}")
+    else:
+        # Legacy fallback
+        formatted_files = file_manager.list_files(subfolder="01_Data/01_Raw_Formatted", pattern=".csv")
+        if formatted_files:
+             st.info("No data in session. You can select a previously formatted file (Legacy Mode).")
+             selected_file = st.selectbox("Choose File", formatted_files)
+             if selected_file:
+                 df = file_manager.load_data(selected_file, subfolder="01_Data/01_Raw_Formatted")
+        else:
+            st.warning("No formatted data found in session. Please go to 'Format Data' and run the formatting step.")
+            return
+
+    if df is not None:
         if df is not None:
             # Ensure timestamp is datetime
             if 'timestamp' in df.columns:
@@ -576,8 +588,19 @@ def app():
                     
                     save_name = f"{station}_tidy_{serial}_{date_str}.csv"
                     
-                    # Filter columns to match standard tidy format
+                    # Store metadata in Session State ONLY
+                    st.session_state['qaqc_metadata'] = {
+                        'field_in': datetime_in,
+                        'field_out': datetime_out,
+                        'prev_field_in': prev_datetime_in,
+                        'prev_field_out': prev_datetime_out,
+                        'record_start': df_qaqc['timestamp'].min().strftime("%Y-%m-%d %H:%M:%S"),
+                        'record_end': df_qaqc['timestamp'].max().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    
+                    # Filter columns to match standard tidy format (NO EXTRA METADATA COLUMNS)
                     cols_to_save = ['data_id', 'station_code', 'timestamp', 'utc_offset', 'logger_serial', 'wtmp', 'wtmp_flag']
+                    
                     # Ensure we only try to select columns that actually exist
                     final_cols = [c for c in cols_to_save if c in df_qaqc.columns]
                     df_to_save = df_qaqc[final_cols]
@@ -588,33 +611,6 @@ def app():
                     # Store the saved filename to link metadata in Report module
                     st.session_state['last_saved_tidy_file'] = save_name
                     
-                    # Save Metadata to JSON sidecar
-                    import json
-                    # Helper to ensure JSON serializable types
-                    def to_native(val):
-                        if hasattr(val, 'item'):
-                            return val.item()
-                        return val
-
-                    metadata_to_save = {
-                        'field_in': datetime_in,
-                        'field_out': datetime_out,
-                        'prev_field_in': prev_datetime_in,
-                        'prev_field_out': prev_datetime_out,
-                        'record_start': df_qaqc['timestamp'].min().strftime("%Y-%m-%d %H:%M:%S"),
-                        'record_end': df_qaqc['timestamp'].max().strftime("%Y-%m-%d %H:%M:%S"),
-                        'station_code': station,
-                        'logger_serial': to_native(serial),
-                        'utc_offset': to_native(df_qaqc['utc_offset'].iloc[0]) if 'utc_offset' in df_qaqc.columns else 0,
-                        'data_id': to_native(df_qaqc['data_id'].iloc[0]) if 'data_id' in df_qaqc.columns else 0
-                    }
-                    
-                    json_name = save_name.replace(".csv", "_metadata.json")
-                    json_path = os.path.join(file_manager.get_project_dir(), "01_Data/02_Tidy", json_name)
-                    try:
-                        with open(json_path, 'w') as f:
-                            json.dump(metadata_to_save, f, indent=4)
-                        st.success(f"Metadata saved to {json_name}")
-                    except Exception as e:
-                        st.error(f"Failed to save metadata JSON: {e}")
+                    # Note: No longer saving metadata JSON sidecar as per user request.
+                    st.info("Metadata stored in Session Memory. Proceed to Review/Report in THIS SESSION.")
 

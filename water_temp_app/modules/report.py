@@ -12,8 +12,8 @@ def app():
     st.subheader("1. Select Tidy Data")
     # Look for files in 02_Tidy
     tidy_files = file_manager.list_files(subfolder="01_Data/02_Tidy", pattern=".csv")
-    # Filter out notes files
-    tidy_files = [f for f in tidy_files if not f.endswith("_notes.csv")]
+    # Filter out any lingering notes/json files just in case (though we stopped making them)
+    tidy_files = [f for f in tidy_files if not f.endswith("_notes.csv") and not f.endswith("_metadata.json")]
     if not tidy_files:
         st.warning("No data found in Tidy folder.")
         return
@@ -122,54 +122,38 @@ def app():
                     prev_field_out = "N/A"
                     
                     # Try to load metadata from JSON sidecar
-                    import json
-                    json_name = selected_file.replace(".csv", "_metadata.json")
-                    json_path = os.path.join(file_manager.get_project_dir(), "01_Data/02_Tidy", json_name)
+                    # LOAD METADATA (Session State + Manual Override)
+                    # We prioritize session state, but allow user to edit/fill in if missing.
                     
-                    if os.path.exists(json_path):
-                        try:
-                            with open(json_path, 'r') as f:
-                                meta = json.load(f)
-                                field_in = meta.get('field_in', "N/A")
-                                field_out = meta.get('field_out', "N/A")
-                                prev_field_in = meta.get('prev_field_in', "N/A")
-                                prev_field_out = meta.get('prev_field_out', "N/A")
-                                if 'record_start' in meta:
-                                    record_start = meta['record_start']
-                                st.success(f"Loaded metadata from {json_name}")
-                        except Exception as e:
-                            st.warning(f"Found metadata file but failed to load: {e}")
+                    default_field_in = "N/A"
+                    default_field_out = "N/A"
+                    default_prev_in = "N/A"
+                    default_prev_out = "N/A"
+                    default_start = record_start
+                    default_end = record_end
                     
-                    # Fallback: If selected file is a "_reviewed" file, try loading metadata from the original file
-                    elif "_reviewed" in selected_file:
-                        original_json_name = json_name.replace("_reviewed_metadata.json", "_metadata.json")
-                        original_json_path = os.path.join(file_manager.get_project_dir(), "01_Data/02_Tidy", original_json_name)
-                        if os.path.exists(original_json_path):
-                            try:
-                                with open(original_json_path, 'r') as f:
-                                    meta = json.load(f)
-                                    field_in = meta.get('field_in', "N/A")
-                                    field_out = meta.get('field_out', "N/A")
-                                    prev_field_in = meta.get('prev_field_in', "N/A")
-                                    prev_field_out = meta.get('prev_field_out', "N/A")
-                                    if 'record_start' in meta:
-                                        record_start = meta['record_start']
-                                    st.success(f"Loaded metadata from original file: {original_json_name}")
-                            except Exception as e:
-                                st.warning(f"Found original metadata file but failed to load: {e}")
+                    if 'qaqc_metadata' in st.session_state:
+                         meta = st.session_state['qaqc_metadata']
+                         default_field_in = str(meta.get('field_in', "N/A"))
+                         default_field_out = str(meta.get('field_out', "N/A"))
+                         default_prev_in = str(meta.get('prev_field_in', "N/A"))
+                         default_prev_out = str(meta.get('prev_field_out', "N/A"))
+                         default_start = str(meta.get('record_start', record_start))
+                         default_end = str(meta.get('record_end', record_end))
+                         st.success("Loaded metadata from Session Memory.")
+                    else:
+                         st.info("MetaData absent from memory (new session). Please enter details below.")
                     
-                    # Fallback to session state if JSON not found (for backward compatibility or immediate session)
-                    elif 'qaqc_metadata' in st.session_state and st.session_state.get('last_saved_tidy_file') == selected_file:
-                        meta = st.session_state['qaqc_metadata']
-                        field_in = meta.get('field_in', "N/A")
-                        field_out = meta.get('field_out', "N/A")
-                        prev_field_in = meta.get('prev_field_in', "N/A")
-                        prev_field_out = meta.get('prev_field_out', "N/A")
-                        # Also override record start/end if available to match what was used in QAQC
-                        if 'record_start' in meta:
-                            record_start = meta['record_start']
-                        if 'record_end' in meta:
-                            record_end = meta['record_end']
+                    with st.expander("Edit Report Metadata (Field Times)", expanded=True):
+                         col_m1, col_m2 = st.columns(2)
+                         with col_m1:
+                            field_in = st.text_input("Field Time In", value=default_field_in)
+                            prev_field_in = st.text_input("Prev Visit In", value=default_prev_in)
+                            record_start = st.text_input("Record Start", value=default_start)
+                         with col_m2:
+                            field_out = st.text_input("Field Time Out", value=default_field_out)
+                            prev_field_out = st.text_input("Prev Visit Out", value=default_prev_out)
+                            record_end = st.text_input("Record End", value=default_end)
                     
                     # Metadata HTML Block
                     
@@ -253,12 +237,16 @@ def app():
                     # Plot HTML
                     plot_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
                     
-                    # Notes
-                    notes_content = "No notes found."
-                    notes_file = selected_file.replace(".csv", "_notes.csv")
-                    notes_df = file_manager.load_data(notes_file, subfolder="01_Data/02_Tidy")
-                    if notes_df is not None and not notes_df.empty:
-                        notes_content = notes_df.iloc[0,0] if not notes_df.empty else "No notes."
+                    # Notes with Edit Capability
+                    default_notes = "No notes entered in session."
+                    if 'qaqc_notes' in st.session_state:
+                        default_notes = st.session_state['qaqc_notes']
+                    elif 'qaqc_notes' in df.columns: # Clean CSV shouldn't have it, but for legacy support
+                         unique = df['qaqc_notes'].dropna().unique()
+                         if len(unique) > 0: default_notes = str(unique[0])
+
+                    with st.expander("Edit QAQC Notes", expanded=True):
+                        notes_content = st.text_area("Notes", value=default_notes)
                     
                     # Full HTML
                     full_html = f"""
