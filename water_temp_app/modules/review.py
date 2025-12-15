@@ -99,6 +99,6 @@ def app():
 
                 save_name = selected_file
                 
-                saved_path = file_manager.save_data(df, save_name, subfolder="01_Data/02_Tidy")
+                saved_path = file_manager.save_data(df, save_name, subfolder="01_Data/02_Tidy", overwrite=True)
                 st.success(f"Reviewed data saved (overwritten) to {saved_path}")
                 st.info("Notes saved to Session Memory.")

@@ -13,7 +13,7 @@ def set_project_dir(path):
         return True
     return False
 
-def save_data(df, filename, subfolder="01_Data/01_Raw_Formatted"):
+def save_data(df, filename, subfolder="01_Data/01_Raw_Formatted", overwrite=False):
     project_dir = get_project_dir()
     full_path_dir = os.path.join(project_dir, subfolder)
     os.makedirs(full_path_dir, exist_ok=True)
@@ -21,7 +21,7 @@ def save_data(df, filename, subfolder="01_Data/01_Raw_Formatted"):
     file_path = os.path.join(full_path_dir, filename)
     
     # Overwrite Protection: Check if file exists and append counter
-    if os.path.exists(file_path):
+    if not overwrite and os.path.exists(file_path):
         base, ext = os.path.splitext(filename)
         counter = 1
         new_filename = f"{base}_{counter}{ext}"
