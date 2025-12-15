@@ -1,6 +1,9 @@
 # Virtual Environment
 water_temp_app/water_temp/
 water_temp_app/water_temp_env/
+water_temp_app/01_Data/02_Tidy/
+water_temp_app/01_Data/03_Compiled/
+water_temp_app/03_Reports/
 venv/
 env/
 .env
