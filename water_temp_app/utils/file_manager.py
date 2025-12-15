@@ -15,9 +15,26 @@ def set_project_dir(path):
 
 def save_data(df, filename, subfolder="01_Data/01_Raw_Formatted"):
     project_dir = get_project_dir()
-    full_path = os.path.join(project_dir, subfolder)
-    os.makedirs(full_path, exist_ok=True)
-    file_path = os.path.join(full_path, filename)
+    full_path_dir = os.path.join(project_dir, subfolder)
+    os.makedirs(full_path_dir, exist_ok=True)
+    
+    file_path = os.path.join(full_path_dir, filename)
+    
+    # Overwrite Protection: Check if file exists and append counter
+    if os.path.exists(file_path):
+        base, ext = os.path.splitext(filename)
+        counter = 1
+        new_filename = f"{base}_{counter}{ext}"
+        new_file_path = os.path.join(full_path_dir, new_filename)
+        
+        while os.path.exists(new_file_path):
+            counter += 1
+            new_filename = f"{base}_{counter}{ext}"
+            new_file_path = os.path.join(full_path_dir, new_filename)
+        
+        st.warning(f"File '{filename}' already exists. Saving as '{new_filename}' instead.")
+        file_path = new_file_path
+        
     df.to_csv(file_path, index=False)
     return file_path
 
@@ -25,7 +42,19 @@ def load_data(filename, subfolder="01_Data/01_Raw_Formatted"):
     project_dir = get_project_dir()
     file_path = os.path.join(project_dir, subfolder, filename)
     if os.path.exists(file_path):
-        return pd.read_csv(file_path)
+        try:
+            return pd.read_csv(file_path)
+        except (UnicodeDecodeError, pd.errors.ParserError):
+            # Fallback: User might have renamed .xlsx to .csv
+            try:
+                # Attempt to read as Excel
+                df = pd.read_excel(file_path)
+                st.warning(f"File '{filename}' appears to be an Excel file renamed to '.csv'. This may cause issues. Please save as CSV properly.")
+                return df
+            except Exception:
+                # If both fail, raise the original CSV error or return None/Error
+                st.error(f"Error reading file '{filename}'. Please ensure it is a valid CSV file.")
+                return None
     return None
 
 def list_files(subfolder="01_Data/01_Raw_Formatted", pattern=None):

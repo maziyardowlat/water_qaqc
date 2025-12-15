@@ -428,6 +428,10 @@ def app():
                     # The rest are NaN.
                     df['wtmp_flag'] = df['wtmp_flag'].fillna('N')
                     
+                    # Ensure wtmp is numeric (handle strings/mixed types from bad loads)
+                    if 'wtmp' in df.columns:
+                        df['wtmp'] = pd.to_numeric(df['wtmp'], errors='coerce')
+
                     # Calculate Stats
                     df['t_change'] = df['wtmp'].diff().abs().fillna(0)
                     df['t_change_lead'] = df['wtmp'].diff(-1).abs().fillna(0)

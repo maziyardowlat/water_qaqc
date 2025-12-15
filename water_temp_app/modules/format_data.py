@@ -24,7 +24,7 @@ def app():
     server_file_path = None
     
     if file_source == "Upload File":
-        uploaded_file = st.file_uploader("Choose CSV File", type=['csv', 'txt'])
+        uploaded_file = st.file_uploader("Choose CSV or Excel File", type=['csv', 'txt', 'xlsx'])
     else:
         # Server Selection Logic
         import glob
@@ -79,7 +79,7 @@ def app():
                     raw_dir = os.path.join(station_folder, "01_Data", "01_Raw")
                     
                     if os.path.exists(raw_dir):
-                        raw_files = [f for f in os.listdir(raw_dir) if f.endswith(".csv") or f.endswith(".txt")]
+                        raw_files = [f for f in os.listdir(raw_dir) if f.endswith(".csv") or f.endswith(".txt") or f.endswith(".xlsx")]
                         if raw_files:
                             selected_filename = st.selectbox("Select Raw File", raw_files)
                             server_file_path = os.path.join(raw_dir, selected_filename)
@@ -103,16 +103,35 @@ def app():
         skip_rows = st.number_input("Rows to Skip", min_value=0, value=1)
         
         try:
-            # Read CSV
+            # Read Data
             if uploaded_file is not None:
-                # Reset file pointer to 0 before reading again if needed, but pandas handles it usually
-                uploaded_file.seek(0)
-                df = pd.read_csv(uploaded_file, skiprows=skip_rows)
                 file_name_for_meta = uploaded_file.name
+                # Reset file pointer
+                uploaded_file.seek(0)
+                
+                if file_name_for_meta.endswith('.xlsx'):
+                    df = pd.read_excel(uploaded_file, skiprows=skip_rows)
+                else:
+                    # Try CSV, but handle potential "renamed xlsx" issue
+                    try:
+                        df = pd.read_csv(uploaded_file, skiprows=skip_rows, low_memory=False)
+                    except (UnicodeDecodeError, pd.errors.ParserError):
+                         # Fallback for renamed files
+                         uploaded_file.seek(0)
+                         df = pd.read_excel(uploaded_file, skiprows=skip_rows)
+                         st.warning("File read as Excel despite extension. Please rename to .xlsx for clarity.")
+
             else:
                 # Server file
-                df = pd.read_csv(server_file_path, skiprows=skip_rows)
                 file_name_for_meta = os.path.basename(server_file_path)
+                if file_name_for_meta.endswith('.xlsx'):
+                    df = pd.read_excel(server_file_path, skiprows=skip_rows)
+                else:
+                    try:
+                         df = pd.read_csv(server_file_path, skiprows=skip_rows, low_memory=False)
+                    except (UnicodeDecodeError, pd.errors.ParserError):
+                         df = pd.read_excel(server_file_path, skiprows=skip_rows)
+                         st.warning("File read as Excel despite extension. Please rename to .xlsx for clarity.")
             
             # Filter "Logged" rows (from R script logic)
             # R: df[apply(df, 1, function(row) !any(row == "Logged")), , drop = FALSE]
