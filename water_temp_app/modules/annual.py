@@ -30,58 +30,51 @@ def app():
             if dfs:
                 # Merge
                 combined_df = pd.concat(dfs, ignore_index=True)
-                combined_df = combined_df.sort_values('timestamp')
+                # Stable sort by timestamp then data_id (or another stable column)
+                # This ensures that if we have duplicates, their relative order is deterministic
+                # We sort by data_id descending to keeping the higher ID? Or ascending?
+                # User said "stick to like 174... not swap". 
+                # Let's sort by timestamp (asc) and data_id (asc). 
+                # This way duplicate groups will always be ordered by data_id.
+                if 'data_id' in combined_df.columns:
+                     combined_df = combined_df.sort_values(['timestamp', 'data_id'])
+                else:
+                     # Fallback to simple sort if no data_id
+                     combined_df = combined_df.sort_values('timestamp')
                 
                 st.write(f"Combined {len(combined_df)} records.")
                 
                 # Handle Duplicates
-                # Group by timestamp
-                # Logic:
-                # If 1 record -> keep
-                # If >1 record:
-                #   If all P -> Average
-                #   If some P -> Keep P (Average P's if multiple)
-                #   If no P -> Average and flag C (Caution)
+                # New Logic: Pick ONE, do not average, do not use 'C'.
                 
-                st.write("Handling duplicates...")
+                st.write("Handling duplicates (picking best record)...")
                 
                 def resolve_duplicates(group):
                     if len(group) == 1:
                         return group.iloc[0]
                     
                     # Multiple records
+                    # Priority 1: 'P' (Pass) flag
                     pass_records = group[group['wtmp_flag'] == 'P']
                     
                     if not pass_records.empty:
-                        # Average the Pass records
-                        avg_temp = pass_records['wtmp'].mean()
-                        # Take the first metadata
-                        result = pass_records.iloc[0].copy()
-                        result['wtmp'] = avg_temp
-                        result['wtmp_flag'] = 'P' # Or 'A' for Averaged
-                        if len(pass_records) > 1:
-                             result['wtmp_flag'] = 'A'
-                        return result
-                    else:
-                        # No pass records
-                        # Average all
-                        avg_temp = group['wtmp'].mean()
-                        result = group.iloc[0].copy()
-                        result['wtmp'] = avg_temp
-                        # If all were Missing, keep M, else C
-                        if all(group['wtmp_flag'] == 'M'):
-                            result['wtmp_flag'] = 'M'
-                        else:
-                            result['wtmp_flag'] = 'C'
-                        return result
+                        # Pick the first one (deterministically due to sort)
+                        return pass_records.iloc[0]
+                    
+                    # Priority 2: Any record
+                    # Just pick the first one. Since we sorted by data_id, this will consistently
+                    # pick the one with the lowest data_id (or based on sort order).
+                    return group.iloc[0]
 
-                # Apply logic (this might be slow for large datasets, but safe)
-                # Optimization: only apply to duplicated timestamps
+                # Apply logic
                 dupes = combined_df.duplicated(subset=['timestamp'], keep=False)
                 if dupes.any():
                     st.info(f"Found {dupes.sum()} duplicate timestamps. Resolving...")
                     
-                    # Split into non-dupes and dupes
+                    # Optimization: Groupby and apply is faster on smaller set, but we need to recombine carefully
+                    # or just apply to the whole group if the valid ones are mixed in.
+                    # Simplest way that preserves order:
+                    
                     non_dupe_df = combined_df[~dupes]
                     dupe_df = combined_df[dupes]
                     

@@ -230,6 +230,10 @@ def app():
                     if not station_code or not logger_serial:
                         st.error("Please provide Station Code and Logger Serial Number.")
                     else:
+                        # Sanitize inputs to prevent filename issues
+                        station_code = str(station_code).replace("/", "_").replace("\\", "_")
+                        logger_serial = str(logger_serial).replace("/", "_").replace("\\", "_")
+
                         # Add metadata columns
                         df_selected['station_code'] = station_code
                         df_selected['logger_serial'] = logger_serial

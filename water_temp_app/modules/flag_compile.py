@@ -164,8 +164,14 @@ def app():
                             matching_files = [f for f in tidy_files if f.startswith(f"{current_station}_tidy_") and str(current_serial) in f]
                         
                         if matching_files:
-                            # Sort by filename
-                            matching_files.sort()
+                            # Sort by date extracted from filename, then by filename
+                            def extract_date_key(f):
+                                # Extract date from end of filename (YYYYMMDD)
+                                match = re.search(r"_(\d{8})\.csv$", f)
+                                date_val = match.group(1) if match else "00000000"
+                                return (date_val, f)
+
+                            matching_files.sort(key=extract_date_key)
                             latest_file = matching_files[-1]
                             
                             # Load the last few rows of the latest file to get the end date
@@ -588,6 +594,10 @@ def app():
                     # Filename: Station_tidy_Serial_Date.csv
                     station = df_qaqc['station_code'].iloc[0] if 'station_code' in df_qaqc.columns else "Unknown"
                     serial = df_qaqc['logger_serial'].iloc[0] if 'logger_serial' in df_qaqc.columns else "Unknown"
+
+                    # Sanitize filename components to prevent filesystem errors (e.g. if serial is "n/a")
+                    station = str(station).replace("/", "_").replace("\\", "_")
+                    serial = str(serial).replace("/", "_").replace("\\", "_")
                     date_str = pd.Timestamp.now().strftime("%Y%m%d")
                     
                     save_name = f"{station}_tidy_{serial}_{date_str}.csv"
