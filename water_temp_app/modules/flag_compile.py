@@ -617,7 +617,14 @@ def app():
                     
                     # Ensure we only try to select columns that actually exist
                     final_cols = [c for c in cols_to_save if c in df_qaqc.columns]
-                    df_to_save = df_qaqc[final_cols]
+                    df_to_save = df_qaqc[final_cols].copy()
+
+                    # FIX: Replace Temperature with "NAN" where flag is 'M'
+                    if 'wtmp' in df_to_save.columns and 'wtmp_flag' in df_to_save.columns:
+                        # Ensure wtmp is object data type so it can hold the string "NAN"
+                        df_to_save['wtmp'] = df_to_save['wtmp'].astype(object)
+                        m_mask = df_to_save['wtmp_flag'] == 'M'
+                        df_to_save.loc[m_mask, 'wtmp'] = "NAN"
                     
                     saved_path = file_manager.save_data(df_to_save, save_name, subfolder="01_Data/02_Tidy")
                     st.success(f"Saved to {saved_path}")

@@ -25,6 +25,9 @@ def app():
                 if d is not None:
                     if 'timestamp' in d.columns:
                         d['timestamp'] = pd.to_datetime(d['timestamp'])
+                    # FIX: Coerce temperature to numeric (handles "NAN" strings)
+                    if 'wtmp' in d.columns:
+                        d['wtmp'] = pd.to_numeric(d['wtmp'], errors='coerce')
                     dfs.append(d)
             
             if dfs:
@@ -87,10 +90,15 @@ def app():
                 st.success(f"Compilation Complete. Final records: {len(final_df)}")
                 
                 # Save Compiled
+                final_df_to_save = final_df.copy()
+                if 'wtmp' in final_df_to_save.columns:
+                     final_df_to_save['wtmp'] = final_df_to_save['wtmp'].astype(object)
+                     final_df_to_save['wtmp'] = final_df_to_save['wtmp'].fillna("NAN")
+                
                 station = final_df['station_code'].iloc[0] if 'station_code' in final_df.columns else "Unknown"
                 year = pd.Timestamp.now().year
                 save_name = f"{station}_compiled_{year}.csv"
-                saved_path = file_manager.save_data(final_df, save_name, subfolder="01_Data/03_Compiled")
+                saved_path = file_manager.save_data(final_df_to_save, save_name, subfolder="01_Data/03_Compiled")
                 st.write(f"Saved compiled data to {saved_path}")
                 
                 # Annual Plot

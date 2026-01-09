@@ -31,6 +31,10 @@ def app():
             if 'timestamp' in df.columns:
                 df['timestamp'] = pd.to_datetime(df['timestamp'])
             
+            # FIX: Coerce temperature to numeric (handles "NAN" strings)
+            if 'wtmp' in df.columns:
+                df['wtmp'] = pd.to_numeric(df['wtmp'], errors='coerce')
+            
             st.write(f"Loaded {len(df)} rows.")
 
             # Check for required columns
@@ -97,8 +101,15 @@ def app():
                 if 'qaqc_notes' in df.columns:
                     df = df.drop(columns=['qaqc_notes'])
 
+                # FIX: Convert 'wtmp' back to object and replace NaN with "NAN" strings before saving
+                # This ensures we don't lose the "NAN"s when overwriting
+                df_to_save = df.copy()
+                if 'wtmp' in df_to_save.columns:
+                    df_to_save['wtmp'] = df_to_save['wtmp'].astype(object)
+                    df_to_save['wtmp'] = df_to_save['wtmp'].fillna("NAN")
+
                 save_name = selected_file
                 
-                saved_path = file_manager.save_data(df, save_name, subfolder="01_Data/02_Tidy", overwrite=True)
+                saved_path = file_manager.save_data(df_to_save, save_name, subfolder="01_Data/02_Tidy", overwrite=True)
                 st.success(f"Reviewed data saved (overwritten) to {saved_path}")
                 st.info("Notes saved to Session Memory.")

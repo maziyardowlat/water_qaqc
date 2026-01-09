@@ -26,6 +26,10 @@ def app():
             if 'timestamp' in df.columns:
                 df['timestamp'] = pd.to_datetime(df['timestamp'])
             
+            # FIX: Coerce temperature to numeric (handles "NAN" strings)
+            if 'wtmp' in df.columns:
+                df['wtmp'] = pd.to_numeric(df['wtmp'], errors='coerce')
+            
             st.subheader(f"Report for {selected_file}")
 
             # Summary Stats
