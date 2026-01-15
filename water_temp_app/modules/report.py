@@ -274,10 +274,10 @@ def app():
                     """
                     
                     # Save
-                    report_name = selected_file.replace(".csv", "_report.html")
-                    # Save to 01_Data root or Tidy? User example was in 01_Data root but let's keep it in Tidy for now or root?
-                    # User path: water_temp_app/01_Data/01FW001_qaqcReport_21731726_20250610.html
-                    # So it seems to be in 01_Data.
+                    # Format: {station_id}_qaqcReport_{logger_serial}_{YYYYMMDD}.html
+                    # Example: 01FW002_qaqcReport_21731701_20250704.html
+                    date_for_filename = pd.Timestamp.now().strftime("%Y%m%d")
+                    report_name = f"{station}_qaqcReport_{serial}_{date_for_filename}.html"
                     
                     project_dir = file_manager.get_project_dir()
                     report_path = os.path.join(project_dir, "03_Reports", "02_QAQC", report_name)

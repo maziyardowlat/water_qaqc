@@ -203,10 +203,18 @@ def app():
                     
                     if len(parts) > 1:
                         default_station = parts[0]
-                        # The rest is Serial_Date...
-                        # Split by '_' to get Serial
+                        # The rest is Serial_Date... or CR<model>_Serial_Date...
+                        # Split by '_' to get the components
                         rest_parts = parts[1].split('_')
-                        if len(rest_parts) > 0:
+                        
+                        # Check if filename contains 'raw_CR' pattern (e.g., raw_CR1000X_3875_...)
+                        # In this case, the serial is the SECOND part (after CR model)
+                        if len(rest_parts) > 0 and rest_parts[0].upper().startswith('CR'):
+                            # CR logger detected - serial is the next part (e.g., '3875')
+                            if len(rest_parts) > 1:
+                                default_serial = rest_parts[1]
+                        else:
+                            # Standard format - serial is the first part
                             default_serial = rest_parts[0]
                 except Exception:
                     pass
@@ -217,13 +225,25 @@ def app():
                     station_code = st.text_input("Station Code", value=default_station, key=f"station_{file_name_for_meta}")
                     logger_serial = st.text_input("Logger Serial Number", value=default_serial, key=f"serial_{file_name_for_meta}")
                 with col2:
-                    # Link UTC Offset to Source Timezone Offset if enabled
-                    default_offset = 0.0
-                    if apply_tz_conversion and 'tz_offset' in locals():
-                        default_offset = float(tz_offset)
-                        
-                    utc_offset = st.number_input("UTC Offset", value=default_offset)
+                    # UTC Offset for the OUTPUT data
+                    # If we are converting to UTC, the output data IS in UTC, so offset = 0
+                    # If NOT converting, the data stays in local time, so offset = tz_offset (e.g., -7)
+                    if apply_tz_conversion:
+                        # Data will be converted to UTC, so stored offset should be 0
+                        default_offset = 0.0
+                    else:
+                        # Data stays in original timezone, so we should NOT auto-set offset
+                        # User must enter it manually if needed
+                        default_offset = 0.0
+                    
+                    # Key includes conversion state to force widget reset when checkbox changes
+                    utc_key = f"utc_offset_{apply_tz_conversion}_{file_name_for_meta}"
+                    utc_offset = st.number_input("UTC Offset", value=default_offset, key=utc_key)
                     data_id = st.number_input("Data ID", value=0)
+                
+                # Info message outside columns to preserve alignment
+                if apply_tz_conversion:
+                    st.info("Data will be converted to UTC → UTC Offset set to 0")
                 
                 # Save Button
                 if st.button("Save Formatted Data"):
