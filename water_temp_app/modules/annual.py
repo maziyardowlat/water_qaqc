@@ -47,45 +47,157 @@ def app():
                 
                 st.write(f"Combined {len(combined_df)} records.")
                 
-                # Handle Duplicates
-                # New Logic: Pick ONE, do not average, do not use 'C'.
+                # ============================================================
+                # Handle Duplicates — Multi-Logger Averaging
+                # Ported from R: WT_AnnualReport.R (lines 127-193)
+                #
+                # When two loggers overlap at the same timestamp, we resolve
+                # duplicates using three cases:
+                #
+                # Case 1 — Both P:
+                #   Average wtmp, concatenate logger_serial with ".",
+                #   concatenate data_id with ".", flag = "AVG"
+                #
+                # Case 2 — One P, one not-P:
+                #   Keep the P record as-is (no averaging, no concatenation).
+                #   The non-P record is discarded.
+                #
+                # Case 3 — Neither P:
+                #   Average wtmp (NA if both NA), concatenate logger_serial
+                #   with "_", concatenate data_id with ".", flag = "C" (Caution).
+                #   Exception: if both flags are "M", flag stays "M".
+                # ============================================================
                 
-                st.write("Handling duplicates (picking best record)...")
+                st.write("Handling duplicate timestamps...")
                 
-                def resolve_duplicates(group):
-                    if len(group) == 1:
-                        return group.iloc[0]
+                # --------------------------------------------------------
+                # Step A: Same-logger dedup
+                # When two tidy files from the same logger overlap, we get
+                # exact duplicate rows (same serial, same timestamp).
+                # Simple dedup: keep the first record, drop the rest.
+                # --------------------------------------------------------
+                before_dedup = len(combined_df)
+                combined_df = combined_df.drop_duplicates(
+                    subset=['timestamp', 'logger_serial'], keep='first'
+                )
+                same_logger_dupes = before_dedup - len(combined_df)
+                if same_logger_dupes > 0:
+                    st.info(f"Removed {same_logger_dupes} same-logger duplicate records.")
+                
+                # --------------------------------------------------------
+                # Step B: Multi-logger averaging
+                # After same-logger dedup, any remaining duplicates must be
+                # from different loggers at the same timestamp.
+                # (Matches R logic: n_distinct(logger_serial) > 1)
+                # --------------------------------------------------------
+                dupes_mask = combined_df.duplicated(subset=['timestamp'], keep=False)
+                
+                if dupes_mask.any():
+                    dupe_count = dupes_mask.sum()
+                    st.info(f"Found {dupe_count} records with multi-logger overlap. Resolving with averaging...")
                     
-                    # Multiple records
-                    # Priority 1: 'P' (Pass) flag
-                    pass_records = group[group['wtmp_flag'] == 'P']
+                    # Split into non-duplicate (unique timestamps) and duplicate groups
+                    non_dupe_df = combined_df[~dupes_mask].copy()
+                    dupe_df = combined_df[dupes_mask].copy()
                     
-                    if not pass_records.empty:
-                        # Pick the first one (deterministically due to sort)
-                        return pass_records.iloc[0]
+                    # --- Case 1: Both loggers passed (all flags == 'P') ---
+                    # Average wtmp, concatenate serials with ".", data_ids with ".", flag = "AVG"
+                    case1_groups = dupe_df.groupby('timestamp').filter(
+                        lambda g: (g['wtmp_flag'] == 'P').all()
+                    )
                     
-                    # Priority 2: Any record
-                    # Just pick the first one. Since we sorted by data_id, this will consistently
-                    # pick the one with the lowest data_id (or based on sort order).
-                    return group.iloc[0]
-
-                # Apply logic
-                dupes = combined_df.duplicated(subset=['timestamp'], keep=False)
-                if dupes.any():
-                    st.info(f"Found {dupes.sum()} duplicate timestamps. Resolving...")
+                    if not case1_groups.empty:
+                        case1_resolved = case1_groups.groupby('timestamp').agg(
+                            wtmp=('wtmp', 'mean'),
+                            logger_serial=('logger_serial', lambda x: '.'.join(str(s) for s in x)),
+                            data_id=('data_id', lambda x: '.'.join(str(s) for s in x)),
+                            # Carry forward metadata from the first record in each group
+                            station_code=('station_code', 'first'),
+                            utc_offset=('utc_offset', 'first'),
+                        ).reset_index()
+                        case1_resolved['wtmp_flag'] = 'AVG'
+                    else:
+                        case1_resolved = pd.DataFrame()
                     
-                    # Optimization: Groupby and apply is faster on smaller set, but we need to recombine carefully
-                    # or just apply to the whole group if the valid ones are mixed in.
-                    # Simplest way that preserves order:
+                    # --- Case 2: One P, one (or more) not-P ---
+                    # Keep the P record as-is, discard non-P records.
+                    case2_groups = dupe_df.groupby('timestamp').filter(
+                        lambda g: g['wtmp_flag'].eq('P').any() and not g['wtmp_flag'].eq('P').all()
+                    )
                     
-                    non_dupe_df = combined_df[~dupes]
-                    dupe_df = combined_df[dupes]
+                    if not case2_groups.empty:
+                        # Just keep the rows flagged 'P'; drop the rest
+                        case2_resolved = case2_groups[case2_groups['wtmp_flag'] == 'P'].copy()
+                        
+                        # If multiple P records exist at the same timestamp, keep just the first
+                        case2_resolved = case2_resolved.drop_duplicates(subset=['timestamp'], keep='first')
+                    else:
+                        case2_resolved = pd.DataFrame()
                     
-                    resolved_dupes = dupe_df.groupby('timestamp').apply(resolve_duplicates).reset_index(drop=True)
+                    # --- Case 3: Neither logger passed (no 'P' flags in group) ---
+                    # Average wtmp (NA if both NA), concatenate serials with "_",
+                    # data_ids with ".", flag = "C" (Caution). If both "M", flag = "M".
+                    case3_groups = dupe_df.groupby('timestamp').filter(
+                        lambda g: not g['wtmp_flag'].eq('P').any()
+                    )
                     
-                    final_df = pd.concat([non_dupe_df, resolved_dupes]).sort_values('timestamp')
+                    if not case3_groups.empty:
+                        def resolve_no_pass(group):
+                            """Resolve a duplicate group where no records passed QAQC."""
+                            # Average wtmp: NA if all NA, otherwise mean of available values
+                            if group['wtmp'].isna().all():
+                                avg_wtmp = pd.NA
+                            else:
+                                avg_wtmp = group['wtmp'].mean(skipna=True)
+                            
+                            # Determine flag: "M" if all flags are "M", otherwise "C" (Caution)
+                            if (group['wtmp_flag'] == 'M').all():
+                                flag = 'M'
+                            else:
+                                flag = 'C'
+                            
+                            # Build the resolved row from the first record's metadata
+                            row = group.iloc[0].copy()
+                            row['wtmp'] = avg_wtmp
+                            row['wtmp_flag'] = flag
+                            row['logger_serial'] = '_'.join(str(s) for s in group['logger_serial'])
+                            row['data_id'] = '.'.join(str(s) for s in group['data_id'])
+                            return row
+                        
+                        case3_resolved = case3_groups.groupby('timestamp').apply(
+                            resolve_no_pass
+                        ).reset_index(drop=True)
+                    else:
+                        case3_resolved = pd.DataFrame()
+                    
+                    # --- Combine all resolved records ---
+                    resolved_parts = [non_dupe_df]
+                    
+                    # Track counts for user feedback
+                    case_counts = []
+                    if not case1_resolved.empty:
+                        resolved_parts.append(case1_resolved)
+                        case_counts.append(f"{len(case1_resolved)} averaged (AVG)")
+                    if not case2_resolved.empty:
+                        resolved_parts.append(case2_resolved)
+                        case_counts.append(f"{len(case2_resolved)} kept P record")
+                    if not case3_resolved.empty:
+                        resolved_parts.append(case3_resolved)
+                        case_counts.append(f"{len(case3_resolved)} averaged with caution (C)")
+                    
+                    final_df = pd.concat(resolved_parts, ignore_index=True).sort_values('timestamp')
+                    
+                    st.success(f"Multi-logger merge complete: {', '.join(case_counts)}")
+                    
+                    # Sanity check: no remaining duplicate timestamps
+                    remaining_dupes = final_df.duplicated(subset=['timestamp'], keep=False).sum()
+                    if remaining_dupes > 0:
+                        st.error(f"WARNING: {remaining_dupes} duplicate timestamps remain after merge! Check data.")
+                    else:
+                        st.info("No remaining duplicate timestamps — merge successful.")
                 else:
                     final_df = combined_df
+                    st.info("No multi-logger overlap found — no averaging needed.")
                 
                 st.success(f"Compilation Complete. Final records: {len(final_df)}")
                 
@@ -235,4 +347,3 @@ def app():
             except Exception as e:
                 st.error(f"Could not open file automatically: {e}")
                 st.info(f"Please open this file manually: {report_path}")
-
