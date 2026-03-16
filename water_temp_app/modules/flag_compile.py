@@ -454,75 +454,87 @@ def app():
                     df['stdev_right'] = df['wtmp'].rolling(window=2, min_periods=1).std()
                     df['stdev_left'] = df['wtmp'].iloc[::-1].rolling(window=2, min_periods=1).std().iloc[::-1]
 
-                    # Initialize Flag Column
-                    df['wtmp_flag'] = 'P' # Default Pass
+                    # ============================================================
+                    # Flag Assignment
+                    #
+                    # Standalone flags (M, V, P, E) — always appear alone, never
+                    # concatenated. Priority: V > M > E > P
+                    #
+                    # Concatenatable flags (A, B, S, T) — can co-occur on the
+                    # same row, joined alphabetically with ", " separator.
+                    # Examples: "S", "B, S", "A, B, S, T"
+                    #
+                    # If a standalone flag applies, it wins over any
+                    # concatenatable flags.
+                    # ============================================================
 
-                    # Apply Flags logic (Priority order matters, usually Error > Spike > Pass)
-                    
-                    # Spikes
+                    # --- Compute all condition masks independently ---
+
+                    # Spikes (S) — concatenatable
                     spike_mask = (
-                        (df['t_change'] >= spike_threshold) | 
+                        (df['t_change'] >= spike_threshold) |
                         (df['t_change_lead'] >= spike_threshold) |
                         (df['diff_right'] >= roll_diff_threshold) |
                         (df['diff_left'] >= roll_diff_threshold) |
                         (df['stdev_right'] >= stdev_threshold) |
                         (df['stdev_left'] >= stdev_threshold)
                     )
-                    df.loc[spike_mask, 'wtmp_flag'] = 'S'
-                    
-                    # Error Range
+
+                    # Error Range (E) — standalone
                     error_mask = (df['wtmp'] < min_temp) | (df['wtmp'] > max_temp)
-                    df.loc[error_mask, 'wtmp_flag'] = 'E'
-                    
-                    # High Temp
+
+                    # High Temp / Threshold (T) — concatenatable
                     high_mask = (df['wtmp'] >= high_temp_threshold)
-                    df.loc[high_mask, 'wtmp_flag'] = 'T'
-                    
-                    # Below Ice
+
+                    # Below Ice (B) — concatenatable
                     ice_mask = (df['wtmp'] < 0.0)
-                    df.loc[ice_mask, 'wtmp_flag'] = 'B'
-                    
-                    # Diurnal Range Check (Flag 'A' for Air/Dewatered)
-                    # Group by date
+
+                    # Diurnal Range / Air (A) — concatenatable
                     df['date'] = df['timestamp'].dt.date
                     daily_stats = df.groupby('date')['wtmp'].agg(['max', 'min'])
                     daily_stats['range'] = daily_stats['max'] - daily_stats['min']
-                    
-                    # Identify bad days
                     bad_days = daily_stats[daily_stats['range'] > diurnal_threshold].index
-                    
+                    diurnal_mask = df['date'].isin(bad_days) if not bad_days.empty else pd.Series(False, index=df.index)
                     if not bad_days.empty:
-                        # Create mask for all rows where date is in bad_days
-                        diurnal_mask = df['date'].isin(bad_days)
-                        df.loc[diurnal_mask, 'wtmp_flag'] = 'A'
                         st.warning(f"Flagged {len(bad_days)} days as 'A' (Air/Dewatered) due to diurnal range > {diurnal_threshold}C")
-                    
-                    # Drop temporary date column
                     df = df.drop(columns=['date'])
-                    
-                    # Missing (M)
-                    missing_mask = df['wtmp'].isna()
-                    df.loc[missing_mask, 'wtmp_flag'] = 'M'
-                    
-                    # Visit (V)
-                    # Match R logic: timestamp > dt_in (Strict inequality for start)
-                    visit_mask = (df['timestamp'] > dt_in) & (df['timestamp'] <= dt_out)
-                    df.loc[visit_mask, 'wtmp_flag'] = 'V'
 
-                    # Previous Visit (V)
+                    # Missing (M) — standalone
+                    missing_mask = df['wtmp'].isna()
+
+                    # Visit (V) — standalone
+                    visit_mask = (df['timestamp'] > dt_in) & (df['timestamp'] <= dt_out)
+
+                    # Previous Visit (V) — standalone
+                    prev_visit_mask = pd.Series(False, index=df.index)
                     if prev_datetime_in and prev_datetime_out:
                         try:
                             prev_dt_in = pd.to_datetime(prev_datetime_in)
                             prev_dt_out = pd.to_datetime(prev_datetime_out)
-                            # Match R logic: timestamp > prev_dt_in
                             prev_visit_mask = (df['timestamp'] > prev_dt_in) & (df['timestamp'] <= prev_dt_out)
-                            
-                            # Create mask for rows that are in range AND not M
-                            apply_prev_mask = prev_visit_mask & (df['wtmp_flag'] != 'M')
-                            df.loc[apply_prev_mask, 'wtmp_flag'] = 'V'
                             st.info(f"Applied 'V' flag for previous visit: {prev_dt_in} to {prev_dt_out}")
                         except Exception as e:
                             st.warning(f"Could not parse Previous Visit times: {e}")
+
+                    # --- Build concatenated flags (alphabetical: A, B, S, T) ---
+                    concat_flags = pd.Series('', index=df.index)
+                    for flag_char, mask in sorted([('A', diurnal_mask), ('B', ice_mask), ('S', spike_mask), ('T', high_mask)]):
+                        concat_flags = concat_flags.where(~mask, concat_flags + flag_char + ', ')
+                    # Strip trailing ", "
+                    concat_flags = concat_flags.str.rstrip(', ')
+
+                    # --- Assign final flags ---
+                    # Default: P (pass) for rows with no issues
+                    # If concatenatable flags exist, use them; otherwise P
+                    df['wtmp_flag'] = concat_flags.where(concat_flags != '', 'P')
+
+                    # Standalone overrides (priority: E, then M, then V)
+                    df.loc[error_mask, 'wtmp_flag'] = 'E'
+                    df.loc[missing_mask, 'wtmp_flag'] = 'M'
+                    df.loc[visit_mask, 'wtmp_flag'] = 'V'
+                    # Previous visit: apply V only to non-M rows
+                    apply_prev_mask = prev_visit_mask & (df['wtmp_flag'] != 'M')
+                    df.loc[apply_prev_mask, 'wtmp_flag'] = 'V'
                     
                     st.success("QAQC Complete!")
                     
