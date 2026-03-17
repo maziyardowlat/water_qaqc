@@ -74,18 +74,21 @@ def app():
         if df is not None:
             # Ensure timestamp is datetime
             if 'timestamp' in df.columns:
-                # Use format='mixed' to handle various formats and silence warnings
-                # Try parsing with explicit formats to avoid ambiguity (e.g. YY-MM-DD vs DD-MM-YY)
-                try:
-                    # Try 2-digit year first (common in raw logger files: 24-08-14)
-                    df['timestamp'] = pd.to_datetime(df['timestamp'], format='%y-%m-%d %H:%M:%S', errors='raise')
-                except (ValueError, TypeError):
+                # If already datetime, skip parsing
+                if pd.api.types.is_datetime64_any_dtype(df['timestamp']):
+                    pass
+                else:
+                    # String timestamps — try explicit formats then fallback
                     try:
-                        # Try 4-digit year (ISO: 2024-08-14)
-                        df['timestamp'] = pd.to_datetime(df['timestamp'], format='%Y-%m-%d %H:%M:%S', errors='raise')
+                        # Try 2-digit year first (common in raw logger files: 23-07-26)
+                        df['timestamp'] = pd.to_datetime(df['timestamp'], format='%y-%m-%d %H:%M:%S', errors='raise')
                     except (ValueError, TypeError):
-                        # Fallback to mixed/coerce if explicit formats fail
-                        df['timestamp'] = pd.to_datetime(df['timestamp'], format='mixed', errors='coerce')
+                        try:
+                            # Try 4-digit year (ISO: 2023-07-26)
+                            df['timestamp'] = pd.to_datetime(df['timestamp'], format='%Y-%m-%d %H:%M:%S', errors='raise')
+                        except (ValueError, TypeError):
+                            # Fallback: yearfirst=True to avoid DD-MM-YY misparse
+                            df['timestamp'] = pd.to_datetime(df['timestamp'], yearfirst=True, dayfirst=False, errors='coerce')
             else:
                 st.error("Column 'timestamp' not found in file.")
                 return

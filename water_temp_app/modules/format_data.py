@@ -175,7 +175,8 @@ def app():
                     if st.checkbox("Preview Conversion"):
                         try:
                             # Convert to datetime if not already
-                            temp_ts = pd.to_datetime(df_selected[timestamp_col])
+                            # Use dayfirst=False and yearfirst=True to handle YY-MM-DD logger format
+                            temp_ts = pd.to_datetime(df_selected[timestamp_col], yearfirst=True, dayfirst=False)
                             # Subtract offset to get UTC (e.g. if -7, we add 7 hours to get UTC? No, if local is -7, UTC is local - (-7) = local + 7)
                             # Wait, usually offset is defined as UTC + offset = Local.
                             # So Local - offset = UTC.
@@ -265,7 +266,7 @@ def app():
                             try:
                                 # Ensure timestamp col is selected
                                 if 'timestamp_col' in locals():
-                                    df_selected[timestamp_col] = pd.to_datetime(df_selected[timestamp_col]) - pd.Timedelta(hours=tz_offset)
+                                    df_selected[timestamp_col] = pd.to_datetime(df_selected[timestamp_col], yearfirst=True, dayfirst=False) - pd.Timedelta(hours=tz_offset)
                                     st.info(f"Converted {timestamp_col} to UTC using offset {tz_offset}")
                             except Exception as e:
                                 st.error(f"Failed to convert timezone: {e}")
