@@ -110,7 +110,7 @@ def app():
                         case1_resolved = case1_groups.groupby('timestamp').agg(
                             wtmp=('wtmp', 'mean'),
                             logger_serial=('logger_serial', lambda x: '.'.join(str(s) for s in x)),
-                            data_id=('data_id', lambda x: '.'.join(str(s) for s in x)),
+                            data_id=('data_id', lambda x: '.'.join(str(int(s)) for s in x)),
                             # Carry forward metadata from the first record in each group
                             station_code=('station_code', 'first'),
                             utc_offset=('utc_offset', 'first'),
@@ -161,7 +161,7 @@ def app():
                             row['wtmp'] = avg_wtmp
                             row['wtmp_flag'] = flag
                             row['logger_serial'] = '_'.join(str(s) for s in group['logger_serial'])
-                            row['data_id'] = '.'.join(str(s) for s in group['data_id'])
+                            row['data_id'] = '.'.join(str(int(s)) for s in group['data_id'])
                             return row
                         
                         case3_resolved = case3_groups.groupby('timestamp').apply(
