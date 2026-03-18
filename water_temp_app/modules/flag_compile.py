@@ -613,8 +613,10 @@ def app():
                     # Sanitize filename components to prevent filesystem errors (e.g. if serial is "n/a")
                     station = str(station).replace("/", "_").replace("\\", "_")
                     serial = str(serial).replace("/", "_").replace("\\", "_")
-                    date_str = pd.Timestamp.now().strftime("%Y%m%d")
-                    
+                    # Use the date from the original raw filename if available, otherwise fallback to today
+                    raw_file_date = st.session_state.get('raw_file_date', None)
+                    date_str = raw_file_date if raw_file_date else pd.Timestamp.now().strftime("%Y%m%d")
+
                     save_name = f"{station}_tidy_{serial}_{date_str}.csv"
                     
                     # Store metadata in Session State ONLY

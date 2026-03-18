@@ -276,7 +276,9 @@ def app():
                     # Save
                     # Format: {station_id}_qaqcReport_{logger_serial}_{YYYYMMDD}.html
                     # Example: 01FW002_qaqcReport_21731701_20250704.html
-                    date_for_filename = pd.Timestamp.now().strftime("%Y%m%d")
+                    # Use the date from the original raw filename if available, otherwise fallback to today
+                    raw_file_date = st.session_state.get('raw_file_date', None)
+                    date_for_filename = raw_file_date if raw_file_date else pd.Timestamp.now().strftime("%Y%m%d")
                     report_name = f"{station}_qaqcReport_{serial}_{date_for_filename}.html"
                     
                     project_dir = file_manager.get_project_dir()

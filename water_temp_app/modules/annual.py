@@ -209,7 +209,8 @@ def app():
                 
                 station = final_df['station_code'].iloc[0] if 'station_code' in final_df.columns else "Unknown"
                 year = pd.Timestamp.now().year
-                save_name = f"{station}_compiled_{year}.csv"
+                date_today = pd.Timestamp.now().strftime("%Y-%m-%d")
+                save_name = f"{station}_compiled_{date_today}.csv"
                 saved_path = file_manager.save_data(final_df_to_save, save_name, subfolder="01_Data/03_Compiled")
                 st.write(f"Saved compiled data to {saved_path}")
                 
@@ -315,7 +316,7 @@ def app():
                     """
                     
                     # Save HTML
-                    report_name = f"{station}_annualReport_{year}.html"
+                    report_name = f"{station}_annualReport_{date_today}.html"
                     project_dir = file_manager.get_project_dir()
                     report_path = os.path.join(project_dir, "03_Reports", "03_Annual", report_name)
                     os.makedirs(os.path.dirname(report_path), exist_ok=True)

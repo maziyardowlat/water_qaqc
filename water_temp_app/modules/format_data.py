@@ -272,6 +272,14 @@ def app():
                                 st.error(f"Failed to convert timezone: {e}")
                                 return # Stop saving if conversion fails
                         
+                        # Extract the date from the raw filename (last segment before extension)
+                        # e.g. 04MF001_raw_21432485_20240808.csv → 20240808
+                        raw_date_match = re.search(r'_(\d{8})(?:\.\w+)?$', file_name_for_meta)
+                        if raw_date_match:
+                            st.session_state['raw_file_date'] = raw_date_match.group(1)
+                        else:
+                            st.session_state['raw_file_date'] = None
+
                         # Save to Session State instead of file
                         st.session_state['formatted_df'] = df_selected
                         st.session_state['formatted_filename'] = f"{station_code}_formatted_{logger_serial}.csv" # Keep name for reference
