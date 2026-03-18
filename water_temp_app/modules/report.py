@@ -197,7 +197,18 @@ def app():
                             'A': 'Air/Dewatered'
                         }
                         
-                        flag_counts['flag_name'] = flag_counts['flag_symbol'].map(flag_names).fillna('Unknown')
+                        # Handle concatenated flags (e.g. "A, S" → "Air/Dewatered + Spike")
+                        def resolve_flag_name(symbol):
+                            if symbol in flag_names:
+                                return flag_names[symbol]
+                            # Split on comma/space separators, then look up each flag
+                            individual_flags = [f.strip() for f in str(symbol).replace(',', ' ').split() if f.strip()]
+                            parts = [flag_names.get(f, f) for f in individual_flags]
+                            if parts:
+                                return ' + '.join(parts)
+                            return 'Unknown'
+
+                        flag_counts['flag_name'] = flag_counts['flag_symbol'].apply(resolve_flag_name)
                         flag_counts['flag_prop'] = (flag_counts['flag_count'] / total_records) * 100
                         
                         # Ensure all standard flags are present even if count is 0
