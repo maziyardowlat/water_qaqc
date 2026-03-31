@@ -74,7 +74,7 @@ def app():
             colors = {
                 'P': 'green', 'S': 'red', 'E': 'purple',
                 'T': 'orange', 'B': 'blue', 'M': 'darkred', 'V': 'pink',
-                'D': 'brown', 'N': 'gray', 'A': 'black'
+                'N': 'gray', 'A': 'black'
             }
 
             # Get all unique flags present in the data
@@ -197,7 +197,6 @@ def app():
                             'S': 'Spike',
                             'E': 'Outside sensor limits',
                             'T': 'Above threshold 35',
-                            'D': 'Duplicate timestamp',
                             'M': 'Missing value',
                             'V': 'Visit',
                             'A': 'Air/Dewatered'
@@ -225,7 +224,7 @@ def app():
                         
                         # Sort by some logical order or just symbol
                         # User example order: P, N, B, S, E, T, D, M, V, A
-                        order = ['P', 'N', 'B', 'S', 'E', 'T', 'D', 'M', 'V', 'A']
+                        order = ['P', 'N', 'B', 'S', 'E', 'T', 'M', 'V', 'A']
                         flag_counts['order'] = flag_counts['flag_symbol'].map({k: i for i, k in enumerate(order)})
                         flag_counts = flag_counts.sort_values('order').drop(columns=['order'])
 

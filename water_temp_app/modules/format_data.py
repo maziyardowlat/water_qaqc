@@ -167,7 +167,7 @@ def app():
                 
                 # Timezone Conversion Helper
                 st.subheader("Timezone Conversion")
-                apply_tz_conversion = st.checkbox("Convert Timestamp to UTC?")
+                apply_tz_conversion = st.checkbox("Convert Timestamp to UTC? (ONLY DO THIS FOR WEATHER STATIONS since they are in PDT)")
                 if apply_tz_conversion:
                     tz_offset = st.number_input("Source Timezone Offset (e.g., -7 for PDT)", value=-7.0, step=0.5)
                     timestamp_col = 'timestamp' # We just renamed it

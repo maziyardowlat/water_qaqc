@@ -415,8 +415,11 @@ def app():
                     if 'wtmp_flag' not in df.columns:
                         df['wtmp_flag'] = 'N'
 
-                    # Identify duplicates (timestamps appearing more than once after rounding)
-                    duplicate_mask = df.duplicated(subset=['timestamp'], keep=False)
+                    # Remove duplicate timestamps (keep first occurrence, drop the rest)
+                    dup_count = df.duplicated(subset=['timestamp'], keep='first').sum()
+                    if dup_count > 0:
+                        df = df.drop_duplicates(subset=['timestamp'], keep='first').reset_index(drop=True)
+                        st.warning(f"Dropped {dup_count} duplicate timestamp(s).")
 
                     # Fill NaNs in flag with 'N' (except 'M's we set during padding)
                     df['wtmp_flag'] = df['wtmp_flag'].fillna('N')
@@ -515,8 +518,7 @@ def app():
                     # If concatenatable flags exist, use them; otherwise P
                     df['wtmp_flag'] = concat_flags.where(concat_flags != '', 'P')
 
-                    # Standalone overrides (priority: D, E, M, V — last applied wins)
-                    df.loc[duplicate_mask, 'wtmp_flag'] = 'D'
+                    # Standalone overrides (priority: E, M, V — last applied wins)
                     df.loc[error_mask, 'wtmp_flag'] = 'E'
                     df.loc[missing_mask, 'wtmp_flag'] = 'M'
                     df.loc[visit_mask, 'wtmp_flag'] = 'V'
@@ -524,8 +526,6 @@ def app():
                     apply_prev_mask = prev_visit_mask & (df['wtmp_flag'] != 'M')
                     df.loc[apply_prev_mask, 'wtmp_flag'] = 'V'
 
-                    if duplicate_mask.any():
-                        st.warning(f"Found {duplicate_mask.sum()} duplicate timestamps — flagged as 'D'. Send Report to Data Manager.")
 
                     st.success("QAQC Complete!")
                     
@@ -568,7 +568,7 @@ def app():
                 colors = {
                     'P': 'green', 'S': 'red', 'E': 'purple',
                     'T': 'orange', 'B': 'blue', 'M': 'darkred', 'V': 'pink',
-                    'D': 'brown', 'A': 'black'
+                    'A': 'black'
                 }
 
                 # Plot single-character flags with exact match
