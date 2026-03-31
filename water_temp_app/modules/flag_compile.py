@@ -71,7 +71,6 @@ def app():
             return
 
     if df is not None:
-        if df is not None:
             # Ensure timestamp is datetime
             if 'timestamp' in df.columns:
                 # If already datetime, skip parsing
@@ -366,14 +365,6 @@ def app():
                         current_start = df['timestamp'].min()
                         current_end = df['timestamp'].max()
                         
-                        # Determine start/end
-                        current_start = df['timestamp'].min()
-                        current_end = df['timestamp'].max()
-                        
-                        # Determine start/end
-                        current_start = df['timestamp'].min()
-                        current_end = df['timestamp'].max()
-                        
                         if pad_start:
                             start_dt = pd.to_datetime(pad_start)
                             
@@ -423,18 +414,11 @@ def app():
                     # 1. Flag 'N' (Not QAQC'd) - Initialize
                     if 'wtmp_flag' not in df.columns:
                         df['wtmp_flag'] = 'N'
-                    
-                    # Identify duplicates (timestamps appearing more than once)
-                    # This happens if multiple raw rows rounded to the same 15min interval
+
+                    # Identify duplicates (timestamps appearing more than once after rounding)
                     duplicate_mask = df.duplicated(subset=['timestamp'], keep=False)
-                    df.loc[duplicate_mask, 'wtmp_flag'] = 'D'
-                    
-                    # Fill NaNs in flag with 'N' (except 'M's we just made and 'D's)
-                    # Note: 'M' rows have NaN wtmp_flag initially? 
-                    # Wait, earlier we did: df.loc[new_rows_mask, 'wtmp_flag'] = 'M'
-                    # So 'M' is already set.
-                    # 'D' is now set.
-                    # The rest are NaN.
+
+                    # Fill NaNs in flag with 'N' (except 'M's we set during padding)
                     df['wtmp_flag'] = df['wtmp_flag'].fillna('N')
                     
                     # Ensure wtmp is numeric (handle strings/mixed types from bad loads)
@@ -531,14 +515,18 @@ def app():
                     # If concatenatable flags exist, use them; otherwise P
                     df['wtmp_flag'] = concat_flags.where(concat_flags != '', 'P')
 
-                    # Standalone overrides (priority: E, then M, then V)
+                    # Standalone overrides (priority: D, E, M, V — last applied wins)
+                    df.loc[duplicate_mask, 'wtmp_flag'] = 'D'
                     df.loc[error_mask, 'wtmp_flag'] = 'E'
                     df.loc[missing_mask, 'wtmp_flag'] = 'M'
                     df.loc[visit_mask, 'wtmp_flag'] = 'V'
                     # Previous visit: apply V only to non-M rows
                     apply_prev_mask = prev_visit_mask & (df['wtmp_flag'] != 'M')
                     df.loc[apply_prev_mask, 'wtmp_flag'] = 'V'
-                    
+
+                    if duplicate_mask.any():
+                        st.warning(f"Found {duplicate_mask.sum()} duplicate timestamps — flagged as 'D'. Send Report to Data Manager.")
+
                     st.success("QAQC Complete!")
                     
                     # Store in session state
@@ -578,11 +566,12 @@ def app():
                 ))
                 
                 colors = {
-                    'P': 'green', 'S': 'red', 'E': 'purple', 
+                    'P': 'green', 'S': 'red', 'E': 'purple',
                     'T': 'orange', 'B': 'blue', 'M': 'darkred', 'V': 'pink',
                     'D': 'brown', 'A': 'black'
                 }
-                
+
+                # Plot single-character flags with exact match
                 for flag, color in colors.items():
                     subset = df_qaqc[df_qaqc['wtmp_flag'] == flag]
                     if not subset.empty:
@@ -592,6 +581,21 @@ def app():
                             mode='markers',
                             name=f"Flag: {flag}",
                             marker=dict(color=color, size=6)
+                        ))
+
+                # Plot concatenated flags (e.g. "A, S", "B, S, T")
+                concat_mask = df_qaqc['wtmp_flag'].str.contains(',', na=False)
+                if concat_mask.any():
+                    concat_subset = df_qaqc[concat_mask]
+                    # Group by unique concatenated flag combinations
+                    for combo in concat_subset['wtmp_flag'].unique():
+                        combo_data = concat_subset[concat_subset['wtmp_flag'] == combo]
+                        fig.add_trace(go.Scatter(
+                            x=combo_data['timestamp'],
+                            y=combo_data['wtmp'],
+                            mode='markers',
+                            name=f"Flag: {combo}",
+                            marker=dict(color='brown', size=6, symbol='diamond')
                         ))
 
                 fig.update_layout(

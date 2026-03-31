@@ -69,7 +69,7 @@ def app():
             cols_to_show = ['timestamp', 'wtmp', 'wtmp_flag']
             if 'station_code' in df.columns: cols_to_show.append('station_code')
             
-            edited_df = st.data_editor(df[cols_to_show], num_rows="dynamic", key="editor")
+            edited_df = st.data_editor(df[cols_to_show], num_rows="fixed", key="editor")
             
             # Update the original dataframe with edits
             # Note: st.data_editor returns the edited dataframe. 

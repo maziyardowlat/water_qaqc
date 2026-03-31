@@ -72,24 +72,30 @@ def app():
             
             # 2. Add markers for each flag type
             colors = {
-                'P': 'green', 'S': 'red', 'E': 'purple', 
+                'P': 'green', 'S': 'red', 'E': 'purple',
                 'T': 'orange', 'B': 'blue', 'M': 'darkred', 'V': 'pink',
                 'D': 'brown', 'N': 'gray', 'A': 'black'
             }
-            
+
             # Get all unique flags present in the data
             present_flags = df['wtmp_flag'].unique()
-            
+
             for flag in present_flags:
                 subset = df[df['wtmp_flag'] == flag]
-                color = colors.get(flag, 'black') # Default to black if unknown
-                
+                # For concatenated flags (e.g. "A, S"), use brown/diamond
+                if ',' in str(flag):
+                    color = 'brown'
+                    symbol = 'diamond'
+                else:
+                    color = colors.get(flag, 'black')
+                    symbol = 'circle'
+
                 fig.add_trace(go.Scatter(
                     x=subset['timestamp'],
                     y=subset['wtmp'],
                     mode='markers',
                     name=f"Flag: {flag}",
-                    marker=dict(color=color, size=6)
+                    marker=dict(color=color, size=6, symbol=symbol)
                 ))
 
             fig.update_layout(
