@@ -219,7 +219,7 @@ def app():
             
             # PDF Upload for Current Visit
             visit_pdf = st.file_uploader("open pdf to populate fieldtimes", type="pdf", key="visit_pdf")
-            convert_utc = st.checkbox("convert it to UTC", value=False, key="convert_utc_visit")
+            convert_utc = st.checkbox("convert it to UTC", value=True, key="convert_utc_visit")
             
             if visit_pdf:
                 try:
@@ -277,7 +277,7 @@ def app():
 
             # PDF Upload for Previous Visit
             prev_visit_pdf = st.file_uploader("open pdf to populate fieldtimes", type="pdf", key="prev_visit_pdf")
-            prev_convert_utc = st.checkbox("convert it to UTC", value=False, key="convert_utc_prev")
+            prev_convert_utc = st.checkbox("convert it to UTC", value=True, key="convert_utc_prev")
             
             if prev_visit_pdf:
                 try:
