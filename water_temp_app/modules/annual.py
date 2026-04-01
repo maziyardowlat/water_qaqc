@@ -208,7 +208,12 @@ def app():
                      final_df_to_save['wtmp'] = final_df_to_save['wtmp'].fillna("NAN")
                 
                 station = final_df['station_code'].iloc[0] if 'station_code' in final_df.columns else "Unknown"
-                year = final_df['timestamp'].dt.year.mode().iloc[0] if 'timestamp' in final_df.columns else pd.Timestamp.now().year
+                if 'timestamp' in final_df.columns:
+                    year_start = final_df['timestamp'].dt.year.min()
+                    year_end = final_df['timestamp'].dt.year.max()
+                    year = f"{year_start}–{year_end}" if year_start != year_end else str(year_start)
+                else:
+                    year = str(pd.Timestamp.now().year)
                 date_today = pd.Timestamp.now().strftime("%Y-%m-%d")
                 save_name = f"{station}_compiled_{date_today}.csv"
                 saved_path = file_manager.save_data(final_df_to_save, save_name, subfolder="01_Data/03_Compiled")
