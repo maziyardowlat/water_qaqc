@@ -415,7 +415,14 @@ def app():
                     if 'wtmp_flag' not in df.columns:
                         df['wtmp_flag'] = 'N'
 
-                    # Remove duplicate timestamps (keep first occurrence, drop the rest)
+                    # Remove duplicate timestamps (prefer rows with valid temperature)
+                    # Event rows (button presses, host connects) have no temp and can
+                    # collide with real readings after timestamp rounding to 15-min grid.
+                    # Sort NaN-temp rows last so drop_duplicates keeps real readings.
+                    df = df.sort_values(
+                        ['timestamp', 'wtmp'],
+                        na_position='last'
+                    ).reset_index(drop=True)
                     dup_count = df.duplicated(subset=['timestamp'], keep='first').sum()
                     if dup_count > 0:
                         df = df.drop_duplicates(subset=['timestamp'], keep='first').reset_index(drop=True)
