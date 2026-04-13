@@ -3,5 +3,6 @@ pandas
 numpy
 plotly
 openpyxl
+pdfplumber
 
 scipy
