@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 from utils import file_manager
 import os
+import numpy as np
 
 def app():
     st.header("Annual Report & Compilation")
@@ -146,7 +147,7 @@ def app():
                             """Resolve a duplicate group where no records passed QAQC."""
                             # Average wtmp: NA if all NA, otherwise mean of available values
                             if group['wtmp'].isna().all():
-                                avg_wtmp = pd.NA
+                                avg_wtmp = np.nan
                             else:
                                 avg_wtmp = group['wtmp'].mean(skipna=True)
                             
@@ -198,6 +199,9 @@ def app():
                 else:
                     final_df = combined_df
                     st.info("No multi-logger overlap found — no averaging needed.")
+
+                if 'wtmp' in final_df.columns:
+                    final_df['wtmp'] = pd.to_numeric(final_df['wtmp'], errors='coerce')
                 
                 st.success(f"Compilation Complete. Final records: {len(final_df)}")
                 
@@ -242,7 +246,8 @@ def app():
                 def get_temp_stats(data, label):
                     if data.empty:
                         return pd.DataFrame()
-                    desc = data['wtmp'].describe(percentiles=[.05, .25, .50, .75, .95])
+                    temps = pd.to_numeric(data['wtmp'], errors='coerce')
+                    desc = temps.describe(percentiles=[.05, .25, .50, .75, .95])
                     stats = {
                         'Metric': ['Mean', 'SD', 'Min', 'Max', 'Median', 'P05', 'P25', 'P75', 'P95', 'Count'],
                         'Value': [
